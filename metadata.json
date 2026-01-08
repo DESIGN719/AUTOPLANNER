@@ -1,0 +1,5 @@
+{
+  "name": "AutoPlanner Pro V3",
+  "description": "Système de gestion de planning d'atelier automobile avec suivi des véhicules de remplacement (VR).",
+  "requestFramePermissions": []
+}
