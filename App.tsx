@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Calendar, Settings, X, Save, Plus, Inbox, Car, BarChart3, Clock, Search, StickyNote, Trash2, Eye, EyeOff, History, Cloud, RefreshCw, Snowflake, Compass, Package, Printer, UserCircle, Copy, TrendingUp, Euro, FileText, Target, AlertCircle } from 'lucide-react';
+import { Calendar, Settings, X, Save, Plus, Inbox, Car, BarChart3, Clock, Search, StickyNote, Trash2, Eye, EyeOff, History, Cloud, RefreshCw, Snowflake, Compass, Package, Printer, UserCircle, Copy, TrendingUp, Euro, FileText, Target, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { DayData, Appointment, VRBooking, VRData, AppointmentStatus, PRStatus } from './types';
 import { FRENCH_HOLIDAYS_2026, STATUS_CONFIG } from './constants';
 import PlanningDayRow from './components/PlanningDayRow';
@@ -52,6 +52,11 @@ const safeSetStorage = (key: string, value: any) => {
   }
 };
 
+// Interface étendue locale pour le formulaire de réservation
+interface VRBookingFormData extends VRBooking {
+  vrNote?: string; // Champ temporaire pour la note permanente du véhicule
+}
+
 const App: React.FC = () => {
   const [viewStartDate, setViewStartDate] = useState('2026-01-05'); 
   const [currentView, setCurrentView] = useState<'calendar' | 'workshop'>('calendar');
@@ -70,7 +75,7 @@ const App: React.FC = () => {
   const [activeStatusFilters, setActiveStatusFilters] = useState<AppointmentStatus[]>(['stock', 'a-venir', 'en-cours', 'livre', 'livre-non-termine', 'facture', 'paye']);
   
   const [tempApt, setTempApt] = useState<Appointment | null>(null);
-  const [tempVRBooking, setTempVRBooking] = useState<VRBooking | null>(null);
+  const [tempVRBooking, setTempVRBooking] = useState<VRBookingFormData | null>(null);
   const [tempNoteText, setTempNoteText] = useState('');
   const [showVrSelector, setShowVrSelector] = useState(false);
   
@@ -206,8 +211,8 @@ const App: React.FC = () => {
         if (data.dailyNotes) setDailyNotes(data.dailyNotes);
         setLastSaved(new Date());
         setSyncError(false);
-      } else { setSyncError(true); }
-    } catch (err) { setSyncError(true); } finally { if (!silent) setIsSyncing(false); }
+      } else { if (!silent) setSyncError(true); }
+    } catch (err) { if (!silent) setSyncError(true); } finally { if (!silent) setIsSyncing(false); }
   };
 
   const handleSyncToSheets = async () => {
@@ -220,6 +225,13 @@ const App: React.FC = () => {
       setSyncError(false);
     } catch (err) { setSyncError(true); } finally { setIsSyncing(false); }
   };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleLoadFromSheets(true);
+    }, 120000); 
+    return () => clearInterval(interval);
+  }, [sheetsUrl]);
 
   const handleDeleteAppointment = (id: string) => {
     const choice = window.confirm("Souhaitez-vous ANNULER ce dossier (Conserver trace) ?\n\nOK = Annuler (Archiver)\nAnnuler = Supprimer définitivement");
@@ -282,7 +294,6 @@ const App: React.FC = () => {
     for (let i = 0; i < 14; i++) {
       const d = new Date(start); d.setDate(d.getDate() + i);
       const dateStr = d.toISOString().split('T')[0];
-      // On masque les annulés du planning visuel
       days.push({ 
         date: dateStr, 
         appointments: appointments.filter(a => a.date === dateStr && a.status !== 'annule'), 
@@ -417,19 +428,26 @@ const App: React.FC = () => {
     setEditingAptId(null);
   };
 
-  const handleSaveVRBooking = (updated: VRBooking) => {
+  const handleSaveVRBooking = (updated: VRBookingFormData) => {
     setVrBookings(prev => {
       let newBookings = prev.map(b => b.id === updated.id ? updated : b);
       if (!prev.some(b => b.id === updated.id)) newBookings = [...newBookings, updated];
       return newBookings;
     });
 
+    // Sauvegarde de la note permanente si elle a été modifiée
+    if (updated.vrNote !== undefined) {
+        setVrFleet(prev => prev.map(v => v.id === updated.vrId ? {
+            ...v,
+            observations: updated.vrNote
+        } : v));
+    }
+
     if (updated.endMileage && updated.endMileage > 0 && updated.status !== 'annule') {
       setVrFleet(prev => prev.map(v => v.id === updated.vrId ? {
         ...v,
         kilometrage: updated.endMileage!,
-        niveauCarburant: updated.endFuel || v.niveauCarburant,
-        observations: updated.observations || v.observations
+        niveauCarburant: updated.endFuel || v.niveauCarburant
       } : v));
     }
 
@@ -536,7 +554,11 @@ const App: React.FC = () => {
       const booking = vrBookings.find(b => b.id === editingVRBookingId);
       if (booking) {
         const vr = vrFleet.find(v => v.id === booking.vrId);
-        setTempVRBooking({ ...booking, observations: booking.observations || vr?.observations || '' });
+        setTempVRBooking({ 
+            ...booking, 
+            observations: booking.observations || '',
+            vrNote: vr?.observations || '' // Récupération de la note permanente du véhicule
+        });
       }
     } else {
       setTempVRBooking(null);
@@ -594,7 +616,17 @@ const App: React.FC = () => {
 
   const handleAddNewVR = () => {
     const newVr: VRData = {
-      id: `vr-${Date.now()}`, immatriculation: 'NOUVEAU', marque: 'MARQUE', modele: 'MODÈLE', dateMiseEnCirculation: new Date().toISOString().split('T')[0], typeCarburant: 'Essence', niveauCarburant: 'Full', kilometrage: 0, isVisible: true, slotPosition: vrFleet.length + 1, proprietaire: 'GARAGE PRO / SOCIÉTÉ X'
+      id: `vr-${Date.now()}`, 
+      immatriculation: '', 
+      marque: '', 
+      modele: '', 
+      dateMiseEnCirculation: new Date().toISOString().split('T')[0], 
+      typeCarburant: 'Essence', 
+      niveauCarburant: 'Full', 
+      kilometrage: 0, 
+      isVisible: true, 
+      slotPosition: vrFleet.length + 1, 
+      proprietaire: ''
     };
     setVrFleet(prev => [...prev, newVr]);
     setEditingVrDataId(newVr.id);
@@ -674,7 +706,7 @@ const App: React.FC = () => {
                     const lastBooking = sortedBookings[0];
                     const startFuel = lastBooking?.endFuel ?? v?.niveauCarburant ?? 'Full';
                     setVrBookings(prev => [...prev, { 
-                      id: `bk-${Date.now()}`, vrId: vid, clientName: apt.clientName, startDate: date, startHour: apt.appointmentHour || '08:00', endDate: apt.exitDate || date, endHour: apt.exitHour || '18:00', appointmentId: aid, startMileage: lastBooking?.endMileage ?? v?.kilometrage ?? 0, startFuel: startFuel, endFuel: startFuel, observations: v?.observations || '', status: 'active'
+                      id: `bk-${Date.now()}`, vrId: vid, clientName: apt.clientName, startDate: date, startHour: apt.appointmentHour || '08:00', endDate: apt.exitDate || date, endHour: apt.exitHour || '18:00', appointmentId: aid, startMileage: lastBooking?.endMileage ?? v?.kilometrage ?? 0, startFuel: startFuel, endFuel: startFuel, observations: '', status: 'active'
                     }]);
                     setAppointments(prev => prev.map(a => a.id === aid ? { ...a, hasVr: true, vrImmat: v?.immatriculation } : a));
                   }
@@ -839,10 +871,18 @@ const App: React.FC = () => {
           <div className="h-3 w-px bg-slate-800"></div>
           <div className="flex gap-3"><span>CHANTIERS : <span className="text-white font-black">{appointments.filter(a => a.status !== 'annule').length + stockAppointments.filter(a => a.status !== 'annule').length}</span></span><span>VR : <span className="text-white font-black">{vrBookings.filter(b => b.status !== 'annule').length}</span></span></div>
         </div>
-        <div className="flex items-center gap-2">
-          {lastSaved && <div className={`flex items-center gap-1.5 px-2 py-1 border border-dashed rounded ${syncError ? 'border-rose-500/50 text-rose-500' : 'border-emerald-500/50 text-emerald-500'}`}><Cloud size={12} /><span className="font-black tracking-[0.05em]">{syncError ? 'ERREUR' : `SYNC: ${lastSaved.toLocaleTimeString('fr-FR')}`}</span></div>}
+        <div className="flex items-center gap-3">
+          {lastSaved && (
+            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-all duration-500 ${syncError ? 'bg-rose-500/10 border-rose-500/40 text-rose-500' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
+              <div className={`w-1.5 h-1.5 rounded-full shadow-[0_0_8px_currentColor] ${syncError ? 'bg-rose-500 animate-pulse' : isSyncing ? 'bg-blue-400 animate-bounce' : 'bg-emerald-500'}`} />
+              <span className="font-black tracking-[0.05em] text-[7px]">
+                {syncError ? 'ERREUR DE SYNC' : isSyncing ? 'SYNCHRONISATION...' : `À JOUR : ${lastSaved.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}`}
+              </span>
+              {!syncError && !isSyncing && <CheckCircle2 size={10} className="opacity-60" />}
+            </div>
+          )}
           <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700 shadow-inner">
-            <button onClick={() => handleLoadFromSheets()} title="Recharger" className={`p-1 rounded transition-all hover:bg-slate-700 ${isSyncing ? 'animate-spin text-blue-400' : 'text-blue-400'}`}><RefreshCw size={12} /></button>
+            <button onClick={() => handleLoadFromSheets()} title="Forcer le rafraîchissement" className={`p-1 rounded transition-all hover:bg-slate-700 ${isSyncing ? 'animate-spin text-blue-400' : 'text-blue-400'}`}><RefreshCw size={12} /></button>
             <button onClick={handleSyncToSheets} disabled={isSyncing} className={`px-2 py-1 rounded text-[8px] font-black uppercase transition-all flex items-center gap-1 ${isSyncing ? 'bg-blue-900/50 text-blue-300 opacity-50 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-50'}`}><Cloud size={10} /> {isSyncing ? '...' : 'CLOUD'}</button>
           </div>
         </div>
@@ -898,8 +938,8 @@ const App: React.FC = () => {
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">CLIM</label><button type="button" onClick={() => setTempApt({...tempApt, hasClim: !tempApt.hasClim})} className={`w-full p-1 rounded-lg border shadow-sm flex items-center justify-center h-[25px] ${tempApt.hasClim ? 'bg-sky-100 border-sky-500 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-400 opacity-40'}`}><Snowflake size={14} /></button></div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Date Entrée</label><input type="date" name="date" value={tempApt.date} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" /></div>
-                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">HEURE ENTREE</label><input type="time" name="appointmentHour" step="900" value={tempApt.appointmentHour} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" /></div>
+                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Date Entrée</label><input type="date" name="date" value={tempApt.date} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 text-[10px] outline-none text-black" /></div>
+                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Heure Entrée</label><input type="time" name="appointmentHour" value={tempApt.appointmentHour} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 text-[10px] outline-none text-black" /></div>
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DUREE IMMO (jours)</label><input type="number" step="0.5" name="estimatedDuration" value={tempApt.estimatedDuration || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-black text-[10px] outline-none text-black" /></div>
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DATE SORTIE</label><input type="date" name="exitDate" value={tempApt.exitDate || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" /></div>
                       </div>
@@ -907,7 +947,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="col-span-6 space-y-3">
                     <div className="border border-rose-200 p-3 rounded-xl bg-rose-50/10 grid grid-cols-2 gap-3 h-full">
-                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">N° Facture</label><input name="invoiceNumber" value={tempApt.invoiceNumber || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" placeholder="---" /></div>
+                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">N° Facture</label><input name="invoiceNumber" value={tempApt.invoiceNumber || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" /></div>
                       <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">MONTANT TRAVAUX HT (€)</label><input type="number" name="totalAmount" value={tempApt.totalAmount || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 font-black text-[10px] outline-none text-black" /></div>
                       <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">Comm. (€)</label><input type="number" name="commission" value={tempApt.commission || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 font-black text-[10px] outline-none text-black" /></div>
                       <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">FRANCHISE (€)</label><input type="number" name="franchise" value={tempApt.franchise || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 font-black text-[10px] outline-none text-black" /></div>
@@ -918,22 +958,26 @@ const App: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-12 gap-4 items-end border border-amber-200 p-3 rounded-xl bg-amber-50/10">
                   <div className="col-span-6 flex flex-col gap-1">
-                    <label className="text-[7px] font-black text-amber-600 uppercase">SELECTION VR (NON MODIFIABLE ICI)</label>
+                    <label className="text-[7px] font-black text-amber-600 uppercase">VEHICULE DE REMPLACEMENT</label>
                     <div className="flex items-center gap-2">
-                      <select disabled name="vrImmat" value={tempApt.vrImmat || ''} className="flex-1 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 font-black text-[10px] uppercase outline-none text-slate-500 cursor-not-allowed">
-                        <option value="">-- PAS DE RESERVATION --</option>
-                        {vrFleet.map(v => <option key={v.id} value={v.immatriculation}>{v.immatriculation} - {v.modele}</option>)}
-                      </select>
-                      {tempApt.hasVr && (
-                        <div onClick={() => { 
+                      <div className="flex-1 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 font-black text-[10px] uppercase outline-none text-slate-500 h-[32px] flex items-center">
+                        {tempApt.vrImmat || 'PAS DE RESERVATION'}
+                      </div>
+                      <button 
+                        type="button"
+                        disabled={!tempApt.hasVr}
+                        onClick={() => { 
                             const booking = vrBookings.find(b => b.appointmentId === tempApt.id && b.status !== 'annule');
                             if (booking) setEditingVRBookingId(booking.id);
                             else alert("Détails de réservation introuvables ou annulés.");
-                        }} className="bg-amber-400 text-slate-900 px-3 py-1.5 rounded-lg font-black text-[9px] shadow-sm flex items-center gap-2 shrink-0 cursor-pointer hover:bg-amber-300 transition-colors"><Car size={12} /> VR ACTIF</div>
-                      )}
+                        }} 
+                        className={`px-3 h-[32px] rounded-lg font-black text-[9px] shadow-sm flex items-center gap-2 shrink-0 transition-colors ${tempApt.hasVr ? 'bg-amber-400 text-slate-900 cursor-pointer hover:bg-amber-300' : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed opacity-50'}`}
+                      >
+                        <Car size={12} /> VR {tempApt.hasVr ? 'ACTIF' : ''}
+                      </button>
                     </div>
                   </div>
-                  <div className="col-span-3 space-y-0.5"><label className="text-[7px] font-black text-amber-600 uppercase">N° Facture VR</label><input name="vrInvoiceNumber" value={tempApt.vrInvoiceNumber || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] outline-none text-black" placeholder="FA-VR-..." /></div>
+                  <div className="col-span-3 space-y-0.5"><label className="text-[7px] font-black text-amber-600 uppercase">N° Facture VR</label><input name="vrInvoiceNumber" value={tempApt.vrInvoiceNumber || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] outline-none text-black" /></div>
                   <div className="col-span-3 space-y-0.5"><label className="text-[7px] font-black text-amber-600 uppercase">Montant VR HT (€)</label><input type="number" name="vrInvoiceAmount" value={tempApt.vrInvoiceAmount || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-black text-[10px] outline-none text-black" /></div>
                 </div>
               </div>
@@ -987,9 +1031,6 @@ const App: React.FC = () => {
                              <div className="text-[11px] font-black text-slate-900">{linkedVr?.immatriculation} - {linkedVr?.marque} {linkedVr?.modele}</div>
                           </div>
                        </div>
-                       {!showVrSelector && tempVRBooking.status !== 'annule' && (
-                          <button onClick={() => setShowVrSelector(true)} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase shadow-sm transition-all">CHANGER DE VR</button>
-                       )}
                     </div>
 
                     <div className="grid grid-cols-4 gap-4 items-end">
@@ -1004,10 +1045,33 @@ const App: React.FC = () => {
                       <div className="space-y-1"><label className="text-[7px] font-black text-rose-600 uppercase">Kilométrage Retour</label><input type="number" name="endMileage" value={tempVRBooking.endMileage ?? ''} onChange={(e) => setTempVRBooking({...tempVRBooking, endMileage: e.target.value === '' ? undefined : parseInt(e.target.value)})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-bold text-[11px] uppercase outline-none text-black h-9" placeholder={`${tempVRBooking.startMileage ?? 'KM DEPART'}`} /></div>
                       <div className="space-y-1"><label className="text-[7px] font-black text-rose-600 uppercase">Carburant Retour</label><select name="endFuel" value={tempVRBooking.endFuel || ''} onChange={(e) => setTempVRBooking({...tempVRBooking, endFuel: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-bold text-[11px] outline-none text-black h-9"><option value="">-- {tempVRBooking.startFuel || 'Full'} --</option>{FUEL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
                     </div>
-                    <div className="space-y-1 pt-2"><label className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Observations permanent</label><textarea name="observations" value={tempVRBooking.observations || ''} onChange={(e) => setTempVRBooking({...tempVRBooking, observations: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-bold text-[11px] uppercase outline-none text-black min-h-[120px] resize-none" placeholder="REMARQUES SUR L'ÉTAT DU VÉHICULE..." /></div>
+                    
+                    <div className="space-y-4 pt-2">
+                        <div className="space-y-1">
+                            <label className="text-[7px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5"><Info size={10}/> INFOS RÉSERVATION</label>
+                            <textarea 
+                                name="observations" 
+                                value={tempVRBooking.observations || ''} 
+                                onChange={(e) => setTempVRBooking({...tempVRBooking, observations: e.target.value.toUpperCase()})} 
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-bold text-[11px] uppercase outline-none text-black min-h-[80px] resize-none" 
+                                placeholder="DÉTAILS SPÉCIFIQUES À CETTE RÉSERVATION..." 
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[7px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Car size={10}/> NOTE (Fiche Véhicule)</label>
+                            <textarea 
+                                name="vrNote" 
+                                value={tempVRBooking.vrNote || ''} 
+                                onChange={(e) => setTempVRBooking({...tempVRBooking, vrNote: e.target.value.toUpperCase()})} 
+                                className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-3 py-2 font-bold text-[11px] uppercase outline-none text-black min-h-[80px] resize-none" 
+                                placeholder="OBSERVATIONS PERMANENTES SUR L'ÉTAT DU VÉHICULE..." 
+                            />
+                        </div>
+                    </div>
+
                     <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
                       <button type="button" onClick={() => handleDeleteVRBooking(tempVRBooking.id)} className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase border border-rose-500 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center gap-2"><Trash2 size={16}/> {tempVRBooking.status === 'annule' ? 'SUPPRIMER DÉF.' : 'ANNULER RÉSER.'}</button>
-                      <button type="button" onClick={() => handleSaveVRBooking(tempVRBooking)} className="px-10 py-2.5 rounded-xl text-[10px] font-black uppercase bg-blue-600 text-white hover:bg-blue-50 shadow-xl flex items-center gap-2 transition-all active:scale-95"><Save size={16}/> ENREGISTRER</button>
+                      <button type="button" onClick={() => handleSaveVRBooking(tempVRBooking)} className="px-10 py-2.5 rounded-xl text-[10px] font-black uppercase bg-blue-600 text-white hover:bg-blue-500 shadow-xl flex items-center gap-2 transition-all active:scale-95"><Save size={16}/> ENREGISTRER</button>
                     </div>
                   </div>
                 </>
@@ -1019,29 +1083,44 @@ const App: React.FC = () => {
 
       {editingNoteDate && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col uppercase text-slate-900">
+          <div className="bg-white rounded-xl shadow-2xl w-[450px] h-[450px] overflow-hidden flex flex-col uppercase text-slate-900 relative border border-slate-100">
             <div className="bg-yellow-500 px-6 py-2.5 flex items-center justify-between text-white font-black shrink-0 h-[48px]">
               <h2 className="text-xs tracking-widest flex items-center gap-2 uppercase"><StickyNote size={16} /> NOTE DU {new Date(editingNoteDate).toLocaleDateString('fr-FR', {day: '2-digit', month: 'long'}).toUpperCase()}</h2>
               <button onClick={() => setEditingNoteDate(null)} className="hover:rotate-90 transition-transform"><X size={18}/></button>
             </div>
-            <div className="p-5 space-y-4">
-              <textarea autoFocus value={tempNoteText} onChange={(e) => setTempNoteText(e.target.value.toUpperCase())} className="w-full bg-yellow-50/30 border border-yellow-200 rounded-lg px-3 py-2 font-bold text-[11px] h-32 uppercase outline-none focus:ring-2 focus:ring-yellow-500/20 text-black" />
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
-                <button type="button" onClick={() => { 
+            <div className="p-6 flex-1 flex flex-col gap-4 bg-yellow-50/20">
+              <textarea 
+                autoFocus 
+                value={tempNoteText} 
+                onChange={(e) => setTempNoteText(e.target.value.toUpperCase())} 
+                className="flex-1 w-full bg-white border border-yellow-200 rounded-lg px-4 py-4 font-bold text-[12px] uppercase outline-none focus:ring-2 focus:ring-yellow-500/20 text-black resize-none shadow-inner" 
+                placeholder="SAISISSEZ VOTRE NOTE ICI..."
+              />
+              <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-200/50">
+                <button 
+                  type="button" 
+                  onClick={() => { 
                     if (!window.confirm("Supprimer cette note ?")) return;
                     const newNotes = { ...dailyNotes }; 
                     delete newNotes[editingNoteDate]; 
                     setDailyNotes(newNotes); 
                     setEditingNoteDate(null); 
                     handleSyncToSheets(); 
-                }} className="p-2.5 rounded-lg border border-rose-500 text-rose-500 hover:bg-rose-500 hover:text-white transition-all active:scale-95 shadow-sm">
+                  }} 
+                  className="p-2.5 rounded-lg border border-rose-200 text-rose-500 bg-white hover:bg-rose-50 transition-all active:scale-95 shadow-sm"
+                  title="Supprimer la note"
+                >
                     <Trash2 size={20}/>
                 </button>
-                <button type="button" onClick={() => { 
+                <button 
+                  type="button" 
+                  onClick={() => { 
                     setDailyNotes(prev => ({ ...prev, [editingNoteDate]: tempNoteText.toUpperCase() })); 
                     setEditingNoteDate(null); 
                     handleSyncToSheets(); 
-                }} className="flex-1 bg-yellow-500 text-white py-2.5 rounded-lg font-black text-[10px] uppercase tracking-[0.1em] flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 border border-yellow-600/10 hover:bg-yellow-600">
+                  }} 
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-8 py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 border border-blue-400/10"
+                >
                     <Save size={18} /> ENREGISTRER LA NOTE
                 </button>
               </div>
@@ -1062,28 +1141,28 @@ const App: React.FC = () => {
               <div className="flex-1 bg-white overflow-y-auto">
                 {editingVrData ? (
                   <div className="p-5 max-w-4xl mx-auto space-y-5 relative">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-[#2563eb] shadow-inner"><Car size={24} /></div><div><h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">{editingVrData.immatriculation}</h3><p className="text-slate-400 text-[8px] font-black uppercase">Édition des caractéristiques véhicule</p></div></div><button onClick={() => setShowingHistoryForVrId(editingVrData.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all font-black text-[9px] uppercase"><History size={14}/> Historique</button></div>
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-[#2563eb] shadow-inner"><Car size={24} /></div><div><h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">{editingVrData.immatriculation || "NOUVEAU VÉHICULE"}</h3><p className="text-slate-400 text-[8px] font-black uppercase">Édition des caractéristiques véhicule</p></div></div><button onClick={() => setShowingHistoryForVrId(editingVrData.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all font-black text-[9px] uppercase"><History size={14}/> Historique</button></div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                       <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Marque</label><input value={editingVrData.marque} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { marque: e.target.value.toUpperCase() })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
                       <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Modèle</label><input value={editingVrData.modele} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { modele: e.target.value.toUpperCase() })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
                       <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Immatriculation</label><input value={editingVrData.immatriculation} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { immatriculation: e.target.value.toUpperCase() })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
-                      <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Numéro VIN</label><input value={editingVrData.vin || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { vin: e.target.value.toUpperCase() })} placeholder="VF3..." className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
+                      <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Numéro VIN</label><input value={editingVrData.vin || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { vin: e.target.value.toUpperCase() })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Énergie</label><select value={editingVrData.typeCarburant} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { typeCarburant: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9"><option value="Essence">Essence</option><option value="Diesel">Diesel</option><option value="Hybride">Hybride</option><option value="Électrique">Électrique</option></select></div>
                       <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Niveau Carburant</label><select value={editingVrData.niveauCarburant} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { niveauCarburant: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9">{FUEL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
                       <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Kilométrage Actuel</label><input type="number" value={editingVrData.kilometrage} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { kilometrage: parseInt(e.target.value) || 0 })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
                     </div>
-                    <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Observations permanent</label><textarea value={editingVrData.observations || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { observations: e.target.value.toUpperCase() })} placeholder="ÉTAT, ACCESSOIRES, ÉRAFLURES..." className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-black text-[11px] text-black h-32 resize-none" /></div>
+                    <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">NOTE (Fiche Véhicule)</label><textarea value={editingVrData.observations || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { observations: e.target.value.toUpperCase() })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-black text-[11px] text-black h-32 resize-none" /></div>
                     <div className="pt-2"><div className="flex items-center gap-3 mb-3"><h4 className="text-[9px] font-black text-[#2563eb] uppercase">Section Contrat & Propriété</h4><div className="flex-1 h-px bg-slate-100" /></div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                        <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Propriétaire</label><input value={editingVrData.proprietaire || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { proprietaire: e.target.value.toUpperCase() })} placeholder="GARAGE PRO / SOCIÉTÉ X" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
+                        <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Propriétaire</label><input value={editingVrData.proprietaire || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { proprietaire: e.target.value.toUpperCase() })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
                         <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Numéro de contrat</label><input value={editingVrData.numContrat || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { numContrat: e.target.value.toUpperCase() })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
                         <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Date échéance contrat</label><input type="date" value={editingVrData.dateEcheanceContrat || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { dateEcheanceContrat: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
-                        <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Forfait KM Max</label><input type="number" value={editingVrData.kmMax || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { kmMax: parseInt(e.target.value) || 0 })} placeholder="Ex: 60000" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
+                        <div className="space-y-1"><label className="text-[8px] font-black text-slate-500 uppercase">Forfait KM Max</label><input type="number" value={editingVrData.kmMax || ''} onChange={(e) => handleUpdateVrFleetMember(editingVrData.id, { kmMax: parseInt(e.target.value) || 0 })} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-black text-[10px] text-black h-9" /></div>
                       </div>
                     </div>
-                    <div className="flex justify-end pt-4 border-t border-slate-50"><button onClick={() => { setIsVRManagerOpen(false); handleSyncToSheets(); }} className="px-8 py-2.5 bg-[#0f172a] text-white rounded-xl font-black text-[10px] uppercase flex items-center gap-3 shadow-xl active:scale-95"><Save size={18} /> Valider & Synchroniser</button></div>
+                    <div className="flex justify-end pt-4 border-t border-slate-50"><button onClick={() => { setIsVRManagerOpen(false); handleSyncToSheets(); }} className="px-8 py-2.5 bg-[#0f172a] text-white rounded-xl font-black text-[10px] uppercase flex items-center gap-3 shadow-xl active:scale-95"><Save size={18} /> Enregistrer</button></div>
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center space-y-3 opacity-30 select-none"><div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400"><Car size={40} /></div><p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Sélectionnez un véhicule à administrer</p></div>
@@ -1095,7 +1174,7 @@ const App: React.FC = () => {
       )}
 
       {showingHistoryForVrId && (
-        <div className="fixed inset-0 z-[900] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[900] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col uppercase text-slate-900">
             <div className="bg-slate-800 px-6 py-3 flex items-center justify-between text-white font-black shrink-0"><h2 className="text-xs tracking-[0.2em] flex items-center gap-3"><History size={16} /> Historique des mouvements : {vrFleet.find(v => v.id === showingHistoryForVrId)?.immatriculation}</h2><button onClick={() => setShowingHistoryForVrId(null)} className="hover:rotate-90 transition-transform p-1 bg-white/10 rounded-full"><X size={16}/></button></div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
@@ -1104,7 +1183,7 @@ const App: React.FC = () => {
                     <div className="col-span-3"><span className="text-[7px] font-black text-slate-400 block mb-1">CLIENT</span><span className="text-[11px] font-black text-slate-900">{booking.clientName} {booking.status === 'annule' && "(ANNULÉ)"}</span></div>
                     <div className="col-span-2"><span className="text-[7px] font-black text-slate-400 block mb-1">SORTIE</span><span className="text-[10px] font-bold text-blue-600">{new Date(booking.startDate).toLocaleDateString('fr-FR')} - {booking.startHour}</span><div className="text-[8px] font-black text-slate-500 mt-1">{booking.startMileage} KM | {booking.startFuel}</div></div>
                     <div className="col-span-2"><span className="text-[7px] font-black text-slate-400 block mb-1">RETOUR</span><span className="text-[10px] font-bold text-emerald-600">{new Date(booking.endDate).toLocaleDateString('fr-FR')} - {booking.endHour}</span><div className="text-[8px] font-black text-slate-500 mt-1">{booking.endMileage || '---'} KM | {booking.endFuel || '---'}</div></div>
-                    <div className="col-span-5 border-l border-slate-100 pl-4"><span className="text-[7px] font-black text-slate-400 block mb-1">OBSERVATIONS</span><p className="text-[9px] font-bold text-slate-600 italic line-clamp-3">{booking.observations || "AUCUNE OBSERVATION"}</p></div>
+                    <div className="col-span-5 border-l border-slate-100 pl-4"><span className="text-[7px] font-black text-slate-400 block mb-1">INFOS RÉSERVATION</span><p className="text-[9px] font-bold text-slate-600 italic line-clamp-3">{booking.observations || "AUCUNE INFORMATION"}</p></div>
                  </div>
                ))}
                {vrBookings.filter(b => b.vrId === showingHistoryForVrId).length === 0 && (<div className="h-64 flex items-center justify-center text-slate-400 font-black text-[10px] tracking-[0.2em]">AUCUN MOUVEMENT ENREGISTRÉ</div>)}
