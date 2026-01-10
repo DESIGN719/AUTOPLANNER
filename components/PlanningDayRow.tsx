@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { DayData, LaborTimes, VRBooking, VRData } from '../types';
 import AppointmentCard from './AppointmentCard';
 import { ROW_HEIGHT_PX, FRENCH_HOLIDAYS_2026 } from '../constants';
-import { Plus, Lock, Unlock, StickyNote, Car } from 'lucide-react';
+import { Plus, Lock, Unlock, StickyNote, Car, Calendar as CalendarIcon, Wrench } from 'lucide-react';
 
 interface PlanningDayRowProps {
   dayData: DayData;
@@ -45,9 +46,9 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const BANNER_HEIGHT = 28; 
-  const GRID_HEIGHT = ROW_HEIGHT_PX - BANNER_HEIGHT; // 100px
-  const hourHeight = 10; // 100px / 10 créneaux (8h-18h)
+  const BANNER_HEIGHT = 26; 
+  const GRID_HEIGHT = ROW_HEIGHT_PX - BANNER_HEIGHT; 
+  const hourHeight = GRID_HEIGHT / 10; 
   
   const dateObj = useMemo(() => new Date(date), [date]);
   const weekNum = useMemo(() => getISOWeek(dateObj), [dateObj]);
@@ -64,16 +65,15 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
     return "JOUR FERMÉ";
   }, [isBlocked, holidayName, dateObj]);
 
-  const statusBgClass = useMemo(() => {
+  const headerBgClass = useMemo(() => {
     if (isBlocked) return 'bg-[#ea580c]'; 
     if (isToday) return 'bg-blue-600';     
-    return 'bg-slate-800';                
+    return 'bg-[#1e293b]';                
   }, [isBlocked, isToday]);
 
   const timeToDecimal = (timeStr: string): number => {
     if (!timeStr) return 8;
     const [h, m] = timeStr.split(':').map(Number);
-    // On bride strictement entre 8h et 18h pour l'affichage visuel
     return Math.max(8, Math.min(18, h + (m / 60)));
   };
 
@@ -115,9 +115,8 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
     return carData;
   }, [activeVrs, allVrBookings, date]);
 
-  const totalTimes = appointments.reduce((acc, curr) => ({
-    t1: acc.t1 + curr.laborTimes.t1, t2: acc.t2 + curr.laborTimes.t2, tp: acc.tp + curr.laborTimes.tp, meca: acc.meca + curr.laborTimes.meca,
-  }), { t1: 0, t2: 0, tp: 0, meca: 0 } as LaborTimes);
+  const dayName = dateObj.toLocaleDateString('fr-FR', { weekday: 'short' }).toUpperCase();
+  const dayDate = dateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }).toUpperCase();
 
   return (
     <div 
@@ -125,58 +124,49 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
       style={{ zIndex, minHeight: isBlocked ? `${BANNER_HEIGHT}px` : `${ROW_HEIGHT_PX}px` }}
     >
       
-      {/* 1. HEADER COMPACT (28px) */}
-      <div className={`flex h-[${BANNER_HEIGHT}px] ${statusBgClass} border-b border-white/10 items-stretch sticky top-0 left-0 z-[110] shadow-xl overflow-hidden`} style={{ height: `${BANNER_HEIGHT}px` }}>
+      {/* 1. HEADER COMPACT (26px) */}
+      <div className={`flex items-stretch sticky top-0 left-0 z-[110] shadow-sm border-b border-white/5 ${headerBgClass}`} style={{ height: `${BANNER_HEIGHT}px` }}>
         
-        <div className="w-[32px] shrink-0 flex items-center justify-center border-r border-white/5 bg-black/10">
-          <Car size={13} className="text-white" />
-        </div>
-
-        <div className="w-[288px] flex shrink-0 border-r border-white/10 bg-black/10">
+        {/* Identifiant VR - Layout plus compact avec icône voiture et modèle */}
+        <div className="w-[320px] shrink-0 border-r-2 border-slate-800/50 flex bg-black/10">
+           {/* Icône voiture en début de bandeau */}
+           <div className="w-8 shrink-0 flex items-center justify-center border-r border-white/5 text-white/40">
+             <Car size={14} />
+           </div>
            {activeVrs.map((vr) => (
-             <div key={vr.id} className="flex-1 border-r border-white/5 last:border-0 flex flex-col items-center justify-center leading-none px-1 overflow-hidden">
-               <span className="text-[10px] font-black text-white truncate w-full text-center uppercase tracking-tight">{vr.immatriculation}</span>
-               <span className="text-[7px] font-bold text-white/50 truncate w-full text-center uppercase">{vr.modele}</span>
+             <div key={vr.id} className="flex-1 border-r border-white/5 last:border-0 flex flex-col items-center justify-center px-1 overflow-hidden leading-none gap-0.5">
+               <span className="text-[8px] font-black text-white truncate w-full text-center uppercase tracking-tighter">{vr.immatriculation}</span>
+               <span className="text-[6.5px] font-bold text-white/40 truncate w-full text-center uppercase">{vr.modele}</span>
              </div>
            ))}
         </div>
 
-        <div className="flex-1 flex items-center px-3">
-          <div className="flex items-center gap-2.5">
-            <button onClick={onToggleBlock} className="text-white/60 hover:text-white transition-colors">
+        {/* Info Jour et Actions - Alignement horizontal serré */}
+        <div className="flex-1 flex items-center px-3 justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={onToggleBlock} className="text-white/30 hover:text-white transition-colors">
               {isBlocked ? <Lock size={11} /> : <Unlock size={11} />}
             </button>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9.5px] font-black uppercase tracking-widest text-white">
-                {dateObj.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase()}
-              </span>
-              <div className="w-px h-3 bg-white/20" />
-              <span className="text-[7.5px] font-bold text-white/60 uppercase tracking-tighter">
-                S{String(weekNum).padStart(2, '0')}
-              </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-black text-white tracking-wider">{dayName}</span>
+              <span className="text-[11px] font-black text-white/40">{dayDate}</span>
+              <div className="w-px h-3 bg-white/10 mx-0.5" />
+              <span className="text-[8px] font-black text-white/20 uppercase tracking-widest">S{String(weekNum).padStart(2, '0')}</span>
             </div>
           </div>
 
           {!isBlocked ? (
-            <div className="flex-1 flex justify-end items-center gap-3">
-              <div className="flex items-center gap-2 bg-black/20 px-2 py-0.5 rounded border border-white/5 font-mono text-[7.5px] font-black">
-                <span className="text-white/40">T1:<span className="text-white">{totalTimes.t1.toFixed(1)}</span></span>
-                <span className="text-white/40">T2:<span className="text-white">{totalTimes.t2.toFixed(1)}</span></span>
-                <span className="text-white/40">TP:<span className="text-white">{totalTimes.tp.toFixed(1)}</span></span>
-                <span className="text-white/40">MC:<span className="text-sky-300">{totalTimes.meca.toFixed(1)}</span></span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => onEditNote(date)} className={`p-1 rounded-md border transition-all ${note ? 'bg-yellow-400 text-slate-950 border-yellow-500' : 'bg-white/10 text-white/60 border-white/10 hover:bg-white/20 hover:text-white'}`}>
-                  <StickyNote size={11}/>
-                </button>
-                <button onClick={() => onAddAppointment(date)} className="bg-white text-blue-600 h-[20px] px-2.5 rounded text-[8.5px] font-black uppercase hover:shadow-lg transition-all flex items-center gap-1">
-                  <Plus size={10}/> RDV
-                </button>
-              </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => onEditNote(date)} title="Note du jour" className={`p-1 rounded transition-all ${note ? 'bg-yellow-400 text-slate-950 shadow-sm' : 'text-white/30 hover:text-white'}`}>
+                <StickyNote size={12}/>
+              </button>
+              <button onClick={() => onAddAppointment(date)} className="bg-white/95 text-blue-700 h-[18px] px-2 rounded-md text-[8px] font-black uppercase hover:bg-white transition-all flex items-center gap-1 active:scale-95 shadow-sm">
+                <Plus size={10}/> RDV
+              </button>
             </div>
           ) : (
-            <div className="flex-1 flex justify-end items-center">
-               <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/90 italic">
+            <div className="flex items-center">
+               <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/60 italic">
                  {blockReason}
                </span>
             </div>
@@ -184,30 +174,28 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
         </div>
       </div>
 
-      {/* 2. ZONE DE CONTENU : 100px */}
+      {/* 2. ZONE DE CONTENU */}
       {!isBlocked && (
         <div ref={containerRef} className="flex relative flex-1 overflow-hidden" style={{ height: `${GRID_HEIGHT}px` }}>
           
-          <div className="w-[320px] shrink-0 flex border-r border-slate-700/50 bg-[#0f172a]/30 relative z-20">
-             
-             {/* Timeline Labels */}
-             <div className="w-[32px] shrink-0 h-full border-r border-slate-800 flex flex-col pointer-events-none bg-[#1e293b]/20">
+          {/* BLOC VR (Timeline) */}
+          <div className="w-[320px] shrink-0 flex border-r-2 border-slate-700 bg-slate-900/10 relative z-20">
+             <div className="w-[32px] shrink-0 h-full border-r border-slate-800/40 flex flex-col pointer-events-none bg-black/5">
                 {Array.from({length: 10}).map((_, i) => (
-                  <div key={i} className="flex items-center justify-center border-b border-slate-800/40 text-[6.5px] font-black text-slate-500" style={{ height: `${hourHeight}px` }}>
+                  <div key={i} className="flex items-center justify-center border-b border-slate-800/20 text-[6.5px] font-black text-slate-600" style={{ height: `${hourHeight}px` }}>
                     {i+8}H
                   </div>
                 ))}
              </div>
              
              {redLineTop !== null && (
-               <div className="absolute left-0 right-[-1000px] border-t border-red-500/80 z-[100] pointer-events-none" style={{ top: `${redLineTop}px` }}>
-                 <div className="absolute left-[29px] -top-[3px] w-1.5 h-1.5 rounded-full bg-red-600 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+               <div className="absolute left-0 right-[-1000px] border-t border-red-500/60 z-[100] pointer-events-none" style={{ top: `${redLineTop}px` }}>
+                 <div className="absolute left-[29px] -top-[3.5px] w-2 h-2 rounded-full bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.9)]" />
                </div>
              )}
 
              {activeVrs.map((vr) => (
-               <div key={vr.id} className="flex-1 border-r border-slate-800/50 last:border-0 relative flex flex-col group/vr-col">
-                 {/* Hour Grid Slots with fixed height to prevent rounding shifts */}
+               <div key={vr.id} className="flex-1 border-r border-slate-800/30 last:border-0 relative flex flex-col group/vr-col">
                  {Array.from({ length: 10 }).map((_, h) => {
                    const slotHour = 8 + h;
                    return (
@@ -223,17 +211,15 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
                         if (bid) onMoveVRBooking(bid, vr.id); 
                         else if (aid) onCreateVRFromAppointment(aid, vr.id, date, slotHour); 
                       }} 
-                      className={`border-b border-white/5 transition-colors ${dragOverVR?.vrId === vr.id && dragOverVR?.hour === slotHour ? 'bg-blue-600/30' : 'hover:bg-white/[0.02]'}`}
+                      className={`border-b border-white/[0.02] transition-colors ${dragOverVR?.vrId === vr.id && dragOverVR?.hour === slotHour ? 'bg-blue-600/30' : 'hover:bg-white/[0.01]'}`}
                       style={{ height: `${hourHeight}px` }}
                      />
                    );
                  })}
 
-                 {/* VR Booking Cards */}
                  {(processedVrBookings[vr.id] || []).map(booking => {
                     const top = calculateTop(booking.startDate < date ? '08:00' : booking.startHour);
                     const bottom = calculateTop(booking.endDate > date ? '18:00' : booking.endHour);
-                    // Use exact difference to align with grid lines
                     const height = bottom - top;
                     
                     const isReturned = booking.endMileage !== undefined && booking.endMileage > 0;
@@ -251,7 +237,7 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
                         draggable 
                         onDragStart={(e) => e.dataTransfer.setData('vrBookingId', booking.id)} 
                         onDoubleClick={(e) => { e.stopPropagation(); onEditVRBooking(booking.id); }} 
-                        className={`absolute border rounded-[1px] shadow-sm flex flex-col cursor-pointer overflow-hidden transition-all group/booking box-border ${bgColor} ${booking.hasConflict ? 'animate-blink-overlap' : 'hover:z-[200]'}`} 
+                        className={`absolute border rounded-md shadow-sm flex flex-col cursor-pointer overflow-hidden transition-all group/booking box-border ${bgColor} ${booking.hasConflict ? 'animate-blink-overlap' : 'hover:z-[200]'}`} 
                         style={{ 
                           top: `${top}px`,
                           height: `${height}px`,
@@ -270,6 +256,7 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
              ))}
           </div>
 
+          {/* BLOC CHANTIER */}
           <div 
             onDragOver={(e) => { e.preventDefault(); setIsOverWorkshop(true); }} 
             onDragLeave={() => setIsOverWorkshop(false)} 
@@ -281,7 +268,7 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
               if (aid) onDropAppointment(aid, date); 
               if (noteSourceDate) onDropNote(noteSourceDate, date); 
             }} 
-            className={`flex-1 flex items-center px-4 py-1 gap-3 overflow-x-auto relative transition-colors duration-300 ${isOverWorkshop ? 'bg-blue-600/5' : ''}`}
+            className={`flex-1 flex items-center px-4 py-1 gap-4 overflow-x-auto relative transition-colors duration-300 ${isOverWorkshop ? 'bg-blue-600/5' : ''}`}
             style={{ overflowY: 'hidden' }}
           >
             {note && (
@@ -289,9 +276,9 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
                 draggable 
                 onDragStart={(e) => e.dataTransfer.setData('noteDate', date)} 
                 onClick={() => onEditNote(date)} 
-                className="shrink-0 w-[240px] h-[94px] bg-yellow-400/5 border border-yellow-400/20 border-dashed rounded-xl p-3 flex flex-col gap-1.5 cursor-pointer hover:bg-yellow-400/10 transition-all cursor-move"
+                className="shrink-0 w-[240px] h-[94px] bg-yellow-400/5 border border-yellow-400/30 border-dashed rounded-xl p-3 flex flex-col gap-1.5 cursor-pointer hover:bg-yellow-400/10 transition-all cursor-move group"
               >
-                 <div className="flex items-center gap-1.5 text-yellow-500 font-black text-[8px] uppercase tracking-widest">
+                 <div className="flex items-center gap-1.5 text-yellow-500 font-black text-[8px] uppercase tracking-widest group-hover:scale-105 transition-transform origin-left">
                     <StickyNote size={11} /> Note du jour
                  </div>
                  <div className="text-[9px] font-bold text-slate-400 leading-tight overflow-hidden line-clamp-4 whitespace-pre-wrap uppercase">
@@ -301,8 +288,8 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
             )}
 
             {appointments.length === 0 && !note && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-5">
-                <span className="text-[10px] font-black uppercase tracking-[0.6em] text-white">AUCUN CHANTIER</span>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]">
+                <Wrench size={40} className="text-white" />
               </div>
             )}
 

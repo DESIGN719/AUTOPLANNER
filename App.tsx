@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Calendar, Settings, X, Save, Plus, Inbox, Car, BarChart3, Clock, Search, StickyNote, Trash2, Eye, EyeOff, History, Cloud, RefreshCw, Snowflake, Compass, Package, Printer, UserCircle, Copy, TrendingUp, Euro, FileText, Target, AlertCircle, CheckCircle2, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Settings, X, Save, Plus, Inbox, Car, BarChart3, Clock, Search, StickyNote, Trash2, Eye, EyeOff, History, Cloud, RefreshCw, Snowflake, Compass, Package, Printer, UserCircle, Copy, TrendingUp, Euro, FileText, Target, AlertCircle, CheckCircle2, Info, ChevronLeft, ChevronRight, Wrench } from 'lucide-react';
 import { DayData, Appointment, VRBooking, VRData, AppointmentStatus, PRStatus } from './types';
 import { FRENCH_HOLIDAYS_2026, STATUS_CONFIG } from './constants';
 import PlanningDayRow from './components/PlanningDayRow';
@@ -30,9 +30,6 @@ const MOCK_STOCK: Appointment[] = [
 
 const FUEL_OPTIONS = ['Full', '3/4', '1/2', '1/4', 'Réserve'];
 
-/**
- * Calcul robuste du Lundi de la semaine pour une date donnée (Local Time)
- */
 const getMonday = (d: Date) => {
   const date = new Date(d);
   date.setHours(0, 0, 0, 0);
@@ -42,7 +39,6 @@ const getMonday = (d: Date) => {
   return date;
 };
 
-// Formattage local YYYY-MM-DD constant
 const toLocalDateStr = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -85,7 +81,6 @@ interface VRBookingFormData extends VRBooking {
 }
 
 const App: React.FC = () => {
-  // Initialisation à la semaine en cours
   const [viewStartDate, setViewStartDate] = useState(() => {
     return toLocalDateStr(getMonday(new Date()));
   });
@@ -673,20 +668,29 @@ const App: React.FC = () => {
     setNewAptData(newStock);
   };
 
-  /**
-   * Retour à la semaine en cours : Calculé sur le lundi réel de "maintenant"
-   */
   const handleReturnToToday = useCallback(() => {
     const todayMonday = getMonday(new Date());
-    setViewStartDate(toLocalDateStr(todayMonday));
+    const dateStr = toLocalDateStr(todayMonday);
+    
+    // On met à jour la date de début
+    setViewStartDate(dateStr);
+    
+    // On force la remontée du scroll pour que l'utilisateur voie le début du planning
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, []);
 
   const navigateWeek = (direction: number) => {
     const [y, m, d] = viewStartDate.split('-').map(Number);
     const date = new Date(y, m - 1, d);
     date.setDate(date.getDate() + (direction * 7));
-    // Navigation relative : on s'assure de toujours retomber sur un lundi
     setViewStartDate(toLocalDateStr(getMonday(date)));
+    
+    // On remonte le scroll lors d'un changement de semaine pour une meilleure UX
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo({ top: 0, behavior: 'auto' });
+    }
   };
 
   const weekNumber = useMemo(() => {
@@ -906,12 +910,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      <footer className="bg-[#101827] border-t border-slate-800 px-4 py-1.5 flex items-center justify-between text-[8px] text-slate-500 font-black uppercase shrink-0 z-[200] h-[40px]">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_6px_rgba(59,130,246,0.6)]" /><span className="tracking-widest opacity-60">AUTO-PLANNER PRO</span></div>
-          <div className="h-3 w-px bg-slate-800"></div>
-          <div className="flex gap-3"><span>CHANTIERS : <span className="text-white font-black">{appointments.filter(a => a.status !== 'annule').length + stockAppointments.filter(a => a.status !== 'annule').length}</span></span><span>VR : <span className="text-white font-black">{vrBookings.filter(b => b.status !== 'annule').length}</span></span></div>
-        </div>
+      <footer className="bg-[#101827] border-t border-slate-800 px-4 py-1.5 flex items-center justify-end text-[8px] text-slate-500 font-black uppercase shrink-0 z-[200] h-[40px]">
         <div className="flex items-center gap-3">
           {lastSaved && (
             <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-all duration-500 ${syncError ? 'bg-rose-500/10 border-rose-500/40 text-rose-500' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
@@ -927,7 +926,6 @@ const App: React.FC = () => {
         </div>
       </footer>
 
-      {/* Forms and Modals */}
       {tempApt && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col uppercase text-slate-900 my-4 animate-in fade-in zoom-in-95 duration-200 print-modal">
@@ -981,7 +979,7 @@ const App: React.FC = () => {
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Date Entrée</label><input type="date" name="date" value={tempApt.date} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Heure Entrée</label><input type="time" name="appointmentHour" value={tempApt.appointmentHour} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DUREE IMMO (jours)</label><input type="number" step="0.5" name="estimatedDuration" value={tempApt.estimatedDuration || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-black text-[10px] outline-none text-black" /></div>
-                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DATE SORTIE</label><input type="date" name="exitDate" value={tempApt.exitDate || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" /></div>
+                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DATE SORTIE</label><input type="date" name="exitDate" value={tempApt.exitDate || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
                       </div>
                     </div>
                   </div>
