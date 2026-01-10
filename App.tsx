@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Calendar, Settings, X, Save, Plus, Inbox, Car, BarChart3, Clock, Search, StickyNote, Trash2, Eye, EyeOff, History, Cloud, RefreshCw, Snowflake, Compass, Package, Printer, UserCircle, Copy, TrendingUp, Euro, FileText, Target, AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { Calendar, Settings, X, Save, Plus, Inbox, Car, BarChart3, Clock, Search, StickyNote, Trash2, Eye, EyeOff, History, Cloud, RefreshCw, Snowflake, Compass, Package, Printer, UserCircle, Copy, TrendingUp, Euro, FileText, Target, AlertCircle, CheckCircle2, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DayData, Appointment, VRBooking, VRData, AppointmentStatus, PRStatus } from './types';
 import { FRENCH_HOLIDAYS_2026, STATUS_CONFIG } from './constants';
 import PlanningDayRow from './components/PlanningDayRow';
@@ -19,16 +19,44 @@ const STORAGE_KEYS = {
 const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyrWMfidSUH1b800rEAdSjuneTZEgKLRdzBzwhJ-p5vyi5rO9ZDWGIEf6i-VfvSpYiuAg/exec';
 
 const MOCK_APPOINTMENTS: Appointment[] = [
-  { id: '1', clientName: 'ABITBOL LOLA', insurance: 'AXA', expert: 'BOUVET', immat: 'DRS635', model: 'VW T-ROC', workType: 'CHOC AVANT GAUCHE - DEMONTAGE COMPLET', date: '2026-01-06', appointmentHour: '08:30', status: 'en-cours', laborTimes: { t1: 2.5, t2: 1.5, tp: 3, meca: 0 }, hasVr: true, vrImmat: 'AA-123-BB', hasGeo: true, prStatus: 'recu', exitDate: '2026-01-08', exitHour: '17:00', totalAmount: 2450 },
-  { id: '2', clientName: 'DUMONT JEAN', insurance: 'MACIF', expert: 'LEGRAND', immat: 'HG-022-DD', model: 'PEUGEOT 208', workType: 'REVISION DES 60.000 KM + FREINS', date: '2026-01-07', appointmentHour: '09:00', status: 'a-venir', laborTimes: { t1: 0, t2: 0, tp: 0, meca: 3.5 }, hasVr: false, hasClim: true, prStatus: 'commande', totalAmount: 480, exitDate: '2026-01-07' },
-  { id: '3', clientName: 'MARTIN SOPHIE', insurance: 'ALLIANZ', expert: 'PETIT', immat: 'CC-999-ZZ', model: 'RENAULT CLIO IV', workType: 'REMPLACEMENT PARE-CHOC ARRIERE', date: '2026-01-05', appointmentHour: '08:00', status: 'livre', laborTimes: { t1: 1, t2: 0, tp: 1.5, meca: 0 }, hasVr: true, vrImmat: 'BB-456-CC', prStatus: 'recu', exitDate: '2026-01-05', exitHour: '18:00', totalAmount: 890 }
+  { id: '1', clientName: 'ABITBOL LOLA', insurance: 'AXA', expert: 'BOUVET', immat: 'DRS635', model: 'VW T-ROC', workType: 'CHOC AVANT GAUCHE - DEMONTAGE COMPLET', date: '2026-01-06', appointmentHour: '08:30', status: 'en-cours', laborTimes: { t1: 2.5, t2: 1.5, tp: 3, meca: 0 }, hasVr: true, vrImmat: 'AA-123-BB', hasGeo: true, prStatus: 'recu', exitDate: '2026-01-08', exitHour: '17:00', totalAmount: 2450, estimatedDuration: 2.5 },
+  { id: '2', clientName: 'DUMONT JEAN', insurance: 'MACIF', expert: 'LEGRAND', immat: 'HG-022-DD', model: 'PEUGEOT 208', workType: 'REVISION DES 60.000 KM + FREINS', date: '2026-01-07', appointmentHour: '09:00', status: 'a-venir', laborTimes: { t1: 0, t2: 0, tp: 0, meca: 3.5 }, hasVr: false, hasClim: true, prStatus: 'commande', totalAmount: 480, exitDate: '2026-01-07', estimatedDuration: 0.5 },
+  { id: '3', clientName: 'MARTIN SOPHIE', insurance: 'ALLIANZ', expert: 'PETIT', immat: 'CC-999-ZZ', model: 'RENAULT CLIO IV', workType: 'REMPLACEMENT PARE-CHOC ARRIERE', date: '2026-01-05', appointmentHour: '08:00', status: 'livre', laborTimes: { t1: 1, t2: 0, tp: 1.5, meca: 0 }, hasVr: true, vrImmat: 'BB-456-CC', prStatus: 'recu', exitDate: '2026-01-05', exitHour: '18:00', totalAmount: 890, estimatedDuration: 1.0 }
 ];
 
 const MOCK_STOCK: Appointment[] = [
-  { id: 's1', clientName: 'DUBOIS ALAIN', insurance: 'AXA', expert: 'BOUVET', immat: 'NN-000-JJ', model: 'NISSAN QASHQAI', workType: 'VANDALISME - RAYURES COTE GAUCHE', date: '', appointmentHour: '', status: 'stock', laborTimes: { t1: 0, t2: 8, tp: 10, meca: 0 }, hasVr: false, totalAmount: 4500, prStatus: 'a-commander' }
+  { id: 's1', clientName: 'DUBOIS ALAIN', insurance: 'AXA', expert: 'BOUVET', immat: 'NN-000-JJ', model: 'NISSAN QASHQAI', workType: 'VANDALISME - RAYURES COTE GAUCHE', date: '', appointmentHour: '', status: 'stock', laborTimes: { t1: 0, t2: 8, tp: 10, meca: 0 }, hasVr: false, totalAmount: 4500, prStatus: 'a-commander', estimatedDuration: 3.5 }
 ];
 
 const FUEL_OPTIONS = ['Full', '3/4', '1/2', '1/4', 'Réserve'];
+
+/**
+ * Calcul robuste du Lundi de la semaine pour une date donnée (Local Time)
+ */
+const getMonday = (d: Date) => {
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return date;
+};
+
+// Formattage local YYYY-MM-DD constant
+const toLocalDateStr = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const getISOWeek = (date: Date) => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
 
 const getSafeStorage = (key: string, fallback: any) => {
   try {
@@ -52,13 +80,16 @@ const safeSetStorage = (key: string, value: any) => {
   }
 };
 
-// Interface étendue locale pour le formulaire de réservation
 interface VRBookingFormData extends VRBooking {
-  vrNote?: string; // Champ temporaire pour la note permanente du véhicule
+  vrNote?: string;
 }
 
 const App: React.FC = () => {
-  const [viewStartDate, setViewStartDate] = useState('2026-01-05'); 
+  // Initialisation à la semaine en cours
+  const [viewStartDate, setViewStartDate] = useState(() => {
+    return toLocalDateStr(getMonday(new Date()));
+  });
+  
   const [currentView, setCurrentView] = useState<'calendar' | 'workshop'>('calendar');
   const [editingAptId, setEditingAptId] = useState<string | null>(null);
   const [newAptData, setNewAptData] = useState<Appointment | null>(null);
@@ -77,7 +108,6 @@ const App: React.FC = () => {
   const [tempApt, setTempApt] = useState<Appointment | null>(null);
   const [tempVRBooking, setTempVRBooking] = useState<VRBookingFormData | null>(null);
   const [tempNoteText, setTempNoteText] = useState('');
-  const [showVrSelector, setShowVrSelector] = useState(false);
   
   const [sheetsUrl, setSheetsUrl] = useState(() => {
     try {
@@ -97,10 +127,11 @@ const App: React.FC = () => {
   ]));
   const [vrBookings, setVrBookings] = useState<VRBooking[]>(() => getSafeStorage(STORAGE_KEYS.VR_BOOKINGS, []));
   const [manualOverrides, setManualOverrides] = useState<string[]>(() => getSafeStorage(STORAGE_KEYS.OVERRIDES, []));
-  const [dailyNotes, setDailyNotes] = useState<Record<string, string>>(() => getSafeStorage(STORAGE_KEYS.DAILY_NOTES, { '2026-01-06': 'LIVRAISON PRÉVUE À 17H POUR ABITBOL.\nVÉRIFIER NIVEAUX VR.' }));
+  const [dailyNotes, setDailyNotes] = useState<Record<string, string>>(() => getSafeStorage(STORAGE_KEYS.DAILY_NOTES, {}));
 
   const isDateBlocked = useCallback((dateStr: string) => {
-    const date = new Date(dateStr);
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     const isHoliday = !!FRENCH_HOLIDAYS_2026[dateStr];
     return (isWeekend || isHoliday) ? !manualOverrides.includes(dateStr) : manualOverrides.includes(dateStr);
@@ -108,17 +139,18 @@ const App: React.FC = () => {
 
   const addBusinessDays = useCallback((startDateStr: string, days: number): string => {
     if (!startDateStr || isNaN(days) || days < 0) return startDateStr;
-    let date = new Date(startDateStr);
+    const [y, m, d] = startDateStr.split('-').map(Number);
+    let date = new Date(y, m - 1, d);
     let added = 0;
     while (added < Math.floor(days)) {
       date.setDate(date.getDate() + 1);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = toLocalDateStr(date);
       if (!isDateBlocked(dateStr)) added++;
     }
-    while (isDateBlocked(date.toISOString().split('T')[0])) {
+    while (isDateBlocked(toLocalDateStr(date))) {
       date.setDate(date.getDate() + 1);
     }
-    return date.toISOString().split('T')[0];
+    return toLocalDateStr(date);
   }, [isDateBlocked]);
 
   const calculateExitInfo = (startDateStr: string, startHour: string, durationDays: number) => {
@@ -164,12 +196,13 @@ const App: React.FC = () => {
     let eTime = Math.max(8, Math.min(18, endH + endM / 60));
     
     let totalHours = 0;
-    let current = new Date(startDateStr);
+    const [sy, sm, sd] = startDateStr.split('-').map(Number);
+    let current = new Date(sy, sm - 1, sd);
     
-    if (current.toISOString().split('T')[0] > endDateStr) return 0;
+    if (toLocalDateStr(current) > endDateStr) return 0;
 
-    while (current.toISOString().split('T')[0] <= endDateStr) {
-      const currentStr = current.toISOString().split('T')[0];
+    while (toLocalDateStr(current) <= endDateStr) {
+      const currentStr = toLocalDateStr(current);
       if (!isDateBlocked(currentStr)) {
         if (currentStr === startDateStr && currentStr === endDateStr) {
           totalHours += Math.max(0, eTime - sTime);
@@ -271,7 +304,6 @@ const App: React.FC = () => {
     }
     setEditingVRBookingId(null);
     setTempVRBooking(null);
-    setShowVrSelector(false);
     handleSyncToSheets();
   };
 
@@ -290,10 +322,11 @@ const App: React.FC = () => {
 
   const dayData = useMemo<DayData[]>(() => {
     const days: DayData[] = [];
-    const start = new Date(viewStartDate);
-    for (let i = 0; i < 14; i++) {
+    const [sy, sm, sd] = viewStartDate.split('-').map(Number);
+    const start = new Date(sy, sm - 1, sd);
+    for (let i = 0; i < 31; i++) {
       const d = new Date(start); d.setDate(d.getDate() + i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = toLocalDateStr(d);
       days.push({ 
         date: dateStr, 
         appointments: appointments.filter(a => a.date === dateStr && a.status !== 'annule'), 
@@ -324,16 +357,9 @@ const App: React.FC = () => {
     const now = new Date();
     const allApts = [...appointments, ...stockAppointments].filter(a => a.status !== 'annule');
 
-    const getStartOfWeek = (d: Date) => {
-      const date = new Date(d);
-      const day = date.getDay();
-      const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-      return new Date(date.setDate(diff));
-    };
-
     const calculateForRange = (start: Date, end: Date) => {
-      const sStr = start.toISOString().split('T')[0];
-      const eStr = end.toISOString().split('T')[0];
+      const sStr = toLocalDateStr(start);
+      const eStr = toLocalDateStr(end);
       const filtered = allApts.filter(a => !!a.exitDate && a.exitDate >= sStr && a.exitDate <= eStr);
       return {
         count: filtered.length,
@@ -344,7 +370,7 @@ const App: React.FC = () => {
       };
     };
 
-    const startS = getStartOfWeek(now);
+    const startS = getMonday(now);
     const endS = new Date(startS); endS.setDate(startS.getDate() + 6);
     const startSminus1 = new Date(startS); startSminus1.setDate(startS.getDate() - 7);
     const endSminus1 = new Date(startSminus1); endSminus1.setDate(startSminus1.getDate() + 6);
@@ -435,7 +461,6 @@ const App: React.FC = () => {
       return newBookings;
     });
 
-    // Sauvegarde de la note permanente si elle a été modifiée
     if (updated.vrNote !== undefined) {
         setVrFleet(prev => prev.map(v => v.id === updated.vrId ? {
             ...v,
@@ -463,7 +488,6 @@ const App: React.FC = () => {
     
     setEditingVRBookingId(null);
     setTempVRBooking(null);
-    setShowVrSelector(false);
     handleSyncToSheets();
   };
 
@@ -488,7 +512,7 @@ const App: React.FC = () => {
           if (a.exitDate && deltaDays !== 0) {
             const exitDateObj = new Date(a.exitDate);
             exitDateObj.setDate(exitDateObj.getDate() + deltaDays);
-            updated.exitDate = exitDateObj.toISOString().split('T')[0];
+            updated.exitDate = toLocalDateStr(exitDateObj);
           }
           return updated;
         }
@@ -504,8 +528,8 @@ const App: React.FC = () => {
             e.setDate(e.getDate() + deltaDays);
             return {
               ...b,
-              startDate: s.toISOString().split('T')[0],
-              endDate: e.toISOString().split('T')[0]
+              startDate: toLocalDateStr(s),
+              endDate: toLocalDateStr(e)
             };
           }
           return b;
@@ -541,7 +565,7 @@ const App: React.FC = () => {
     if (currentEditingApt && !tempApt) {
       const initialApt = { ...currentEditingApt, hasVr: currentEditingApt.hasVr || false, hasGeo: currentEditingApt.hasGeo || false, hasClim: currentEditingApt.hasClim || false, prStatus: currentEditingApt.prStatus || 'none' };
       if (initialApt.date && initialApt.appointmentHour && initialApt.estimatedDuration) {
-        const exit = calculateExitInfo(initialApt.date, initialApt.appointmentHour, parseFloat(initialApt.estimatedDuration));
+        const exit = calculateExitInfo(initialApt.date, initialApt.appointmentHour, initialApt.estimatedDuration);
         initialApt.exitDate = exit.date;
         initialApt.exitHour = exit.hour;
       }
@@ -557,7 +581,7 @@ const App: React.FC = () => {
         setTempVRBooking({ 
             ...booking, 
             observations: booking.observations || '',
-            vrNote: vr?.observations || '' // Récupération de la note permanente du véhicule
+            vrNote: vr?.observations || ''
         });
       }
     } else {
@@ -585,10 +609,10 @@ const App: React.FC = () => {
     let updated = { ...tempApt, [name]: newValue };
     
     if (name === 'date' || name === 'estimatedDuration' || name === 'appointmentHour') {
-      let duration = parseFloat(updated.estimatedDuration || '0');
+      let duration = updated.estimatedDuration || 0;
       if (name === 'estimatedDuration') {
         duration = Math.round(duration * 2) / 2;
-        updated.estimatedDuration = String(duration);
+        updated.estimatedDuration = duration;
       }
       if (updated.date && !isNaN(duration) && updated.appointmentHour) {
         const exit = calculateExitInfo(updated.date, updated.appointmentHour, duration);
@@ -598,7 +622,7 @@ const App: React.FC = () => {
       if (updated.date && updated.appointmentHour && updated.exitDate) {
         const currentExitHour = updated.exitHour || '18:00';
         const newDuration = calculateDurationFromExit(updated.date, updated.appointmentHour, updated.exitDate, currentExitHour);
-        updated.estimatedDuration = String(newDuration);
+        updated.estimatedDuration = newDuration;
       }
     }
     setTempApt(updated);
@@ -606,7 +630,7 @@ const App: React.FC = () => {
 
   const immobilizationDays = useMemo(() => {
     if (!tempApt || !tempApt.estimatedDuration) return 0;
-    const val = parseFloat(tempApt.estimatedDuration);
+    const val = tempApt.estimatedDuration;
     return Math.round(val * 2) / 2;
   }, [tempApt?.estimatedDuration]);
 
@@ -620,7 +644,7 @@ const App: React.FC = () => {
       immatriculation: '', 
       marque: '', 
       modele: '', 
-      dateMiseEnCirculation: new Date().toISOString().split('T')[0], 
+      dateMiseEnCirculation: toLocalDateStr(new Date()), 
       typeCarburant: 'Essence', 
       niveauCarburant: 'Full', 
       kilometrage: 0, 
@@ -644,32 +668,86 @@ const App: React.FC = () => {
 
   const handleAddStock = () => {
     const newStock: Appointment = {
-      id: Math.random().toString(36).substring(2, 11), clientName: '', insurance: '', expert: '', intermediary: '', immat: '', model: '', workType: '', date: '', appointmentHour: '', laborTimes: { t1: 0, t2: 0, tp: 0, meca: 0 }, status: 'stock', hasGeo: false, hasClim: false, prStatus: 'none', estimatedDuration: '3.5', invoiceNumber: '', vrInvoiceNumber: '', totalAmount: 0, vrInvoiceAmount: 0
+      id: Math.random().toString(36).substring(2, 11), clientName: '', insurance: '', expert: '', intermediary: '', immat: '', model: '', workType: '', date: '', appointmentHour: '', laborTimes: { t1: 0, t2: 0, tp: 0, meca: 0 }, status: 'stock', hasGeo: false, hasClim: false, prStatus: 'none', estimatedDuration: 3.5, invoiceNumber: '', vrInvoiceNumber: '', totalAmount: 0, vrInvoiceAmount: 0
     };
     setNewAptData(newStock);
   };
 
+  /**
+   * Retour à la semaine en cours : Calculé sur le lundi réel de "maintenant"
+   */
+  const handleReturnToToday = useCallback(() => {
+    const todayMonday = getMonday(new Date());
+    setViewStartDate(toLocalDateStr(todayMonday));
+  }, []);
+
+  const navigateWeek = (direction: number) => {
+    const [y, m, d] = viewStartDate.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setDate(date.getDate() + (direction * 7));
+    // Navigation relative : on s'assure de toujours retomber sur un lundi
+    setViewStartDate(toLocalDateStr(getMonday(date)));
+  };
+
+  const weekNumber = useMemo(() => {
+    const [y, m, d] = viewStartDate.split('-').map(Number);
+    return getISOWeek(new Date(y, m - 1, d));
+  }, [viewStartDate]);
+  
+  const viewYear = useMemo(() => viewStartDate.split('-')[0], [viewStartDate]);
+
   return (
     <div className="min-h-screen flex flex-col select-none overflow-hidden h-screen bg-[#101827]">
       <header className="bg-white border-b border-slate-200 px-4 py-1.5 flex items-center justify-between shrink-0 z-[100] shadow-sm text-slate-800 h-[48px]">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-1.5 rounded-lg text-white shadow-md"><Calendar size={16} /></div>
-          <div><h1 className="text-sm font-black tracking-tight uppercase">AUTOPLANNER <span className="text-blue-600">PRO</span></h1><p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">LOGISTIQUE ATELIER</p></div>
-        </div>
-        <div className="flex-1 flex justify-center px-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-1.5 rounded-lg text-white shadow-md"><Calendar size={16} /></div>
+            <div><h1 className="text-sm font-black tracking-tight uppercase">AUTOPLANNER <span className="text-blue-600">PRO</span></h1><p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">LOGISTIQUE ATELIER</p></div>
+          </div>
+          
+          <div className="h-8 w-px bg-slate-200" />
+
           <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-             <button onClick={() => setCurrentView('calendar')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${currentView === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}><Calendar size={12} /> Planning</button>
-             <button onClick={() => setCurrentView('workshop')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${currentView === 'workshop' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}><BarChart3 size={12} /> Activité</button>
+             <button onClick={() => setCurrentView('calendar')} className={`px-4 h-[32px] rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${currentView === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}><Calendar size={12} /> Planning</button>
+             <button onClick={() => setCurrentView('workshop')} className={`px-4 h-[32px] rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${currentView === 'workshop' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}><BarChart3 size={12} /> Activité</button>
           </div>
         </div>
+        
+        <div className="flex-1 flex justify-center px-4 items-center">
+          {currentView === 'calendar' ? (
+            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+              <button onClick={() => navigateWeek(-1)} title="Semaine Précédente" className="p-1 h-[32px] w-[32px] flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><ChevronLeft size={16}/></button>
+              <div className="flex flex-col items-center min-w-[140px] px-2">
+                <span className="text-[10px] font-black uppercase text-blue-600 tracking-tighter">SEMAINE {weekNumber}</span>
+                <span className="text-[7px] font-bold uppercase text-slate-400 leading-none">{viewYear}</span>
+              </div>
+              <button onClick={() => navigateWeek(1)} title="Semaine Suivante" className="p-1 h-[32px] w-[32px] flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"><ChevronRight size={16}/></button>
+              
+              <div className="w-px h-6 bg-slate-200 mx-1" />
+              
+              <button 
+                onClick={handleReturnToToday} 
+                className="h-[32px] px-4 rounded-lg text-[9px] font-black uppercase bg-white text-blue-600 shadow-sm hover:bg-blue-50 transition-colors flex items-center"
+              >
+                Aujourd'hui
+              </button>
+            </div>
+          ) : (
+            <div className="relative w-full max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input type="text" placeholder="RECHERCHE CLIENT, IMMAT..." value={workshopSearch} onChange={(e) => setWorkshopSearch(e.target.value)} className="w-full bg-slate-100 border-none rounded-xl h-[34px] pl-10 text-slate-800 text-[10px] font-black outline-none uppercase tracking-widest focus:ring-2 focus:ring-blue-500/20" />
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center gap-2">
-          <button onClick={() => setIsVRManagerOpen(true)} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all border flex items-center gap-1.5 shadow-sm bg-white text-slate-600 border-slate-200 hover:bg-slate-50`}><Car size={12} /> Flotte VR</button>
-          <button onClick={() => setIsStockOpen(!isStockOpen)} title={currentView === 'calendar' ? "Dossiers en stock" : "Tableau KPI"} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${isStockOpen ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>{currentView === 'calendar' ? <Inbox size={12} /> : <TrendingUp size={12} />}</button>
+          <button onClick={() => setIsVRManagerOpen(true)} className="h-[32px] px-3 rounded-lg text-[9px] font-black uppercase transition-all border flex items-center gap-1.5 shadow-sm bg-white text-slate-600 border-slate-200 hover:bg-slate-50"><Car size={12} /> Flotte VR</button>
+          <button onClick={() => setIsStockOpen(!isStockOpen)} title={currentView === 'calendar' ? "Dossiers en stock" : "Tableau KPI"} className={`h-[32px] px-3 rounded-lg text-[9px] font-black uppercase transition-all ${isStockOpen ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>{currentView === 'calendar' ? <Inbox size={12} /> : <TrendingUp size={12} />}</button>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
-        <main ref={mainContentRef} className="flex-1 overflow-auto bg-[#101827]">
+        <main ref={mainContentRef} className="flex-1 overflow-auto bg-[#101827] custom-scrollbar">
           {currentView === 'calendar' ? (
             <div className="min-w-[1350px] flex flex-col pb-40">
               {dayData.map((day, idx) => (
@@ -688,7 +766,7 @@ const App: React.FC = () => {
                       const startDateObj = new Date(b.startDate);
                       const targetDate = new Date(startDateObj);
                       targetDate.setDate(startDateObj.getDate() + dayOffset);
-                      const targetDateStr = targetDate.toISOString().split('T')[0];
+                      const targetDateStr = toLocalDateStr(targetDate);
                       if (targetDateStr < b.startDate || (targetDateStr === b.startDate && newHour <= parseInt(b.startHour.split(':')[0]))) {
                         return { ...b, endDate: b.startDate, endHour: String(parseInt(b.startHour.split(':')[0]) + 1).padStart(2, '0') + ':00' };
                       }
@@ -697,7 +775,7 @@ const App: React.FC = () => {
                     return { ...b, startHour: timeStr };
                   }));
                 }} onAddAppointment={(date) => setNewAptData({ 
-                  id: Math.random().toString(36).substring(2, 11), clientName: '', insurance: '', expert: '', intermediary: '', immat: '', model: '', workType: '', date, appointmentHour: '08:00', laborTimes: { t1: 0, t2: 0, tp: 0, meca: 0 }, status: 'a-venir', hasGeo: false, hasClim: false, prStatus: 'none', estimatedDuration: '3.5', invoiceNumber: '', vrInvoiceNumber: '', totalAmount: 0, vrInvoiceAmount: 0
+                  id: Math.random().toString(36).substring(2, 11), clientName: '', insurance: '', expert: '', intermediary: '', immat: '', model: '', workType: '', date, appointmentHour: '08:00', laborTimes: { t1: 0, t2: 0, tp: 0, meca: 0 }, status: 'a-venir', hasGeo: false, hasClim: false, prStatus: 'none', estimatedDuration: 3.5, invoiceNumber: '', vrInvoiceNumber: '', totalAmount: 0, vrInvoiceAmount: 0
                 })} onEditNote={setEditingNoteDate} onCreateVRFromAppointment={(aid, vid, date, hour) => { 
                   const apt = appointments.find(a => a.id === aid) || stockAppointments.find(a => a.id === aid); 
                   if (apt) {
@@ -714,13 +792,9 @@ const App: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="flex flex-col h-full bg-[#0f172a] p-6 space-y-6 overflow-y-auto">
+            <div className="flex flex-col h-full bg-[#0f172a] p-6 space-y-6 overflow-y-auto custom-scrollbar">
               <div className="bg-[#1e293b] rounded-2xl p-4 flex items-center justify-between shadow-sm shrink-0 gap-8">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input type="text" placeholder="RECHERCHE CLIENT, IMMAT..." value={workshopSearch} onChange={(e) => setWorkshopSearch(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-11 text-white text-[10px] font-black outline-none uppercase tracking-widest focus:ring-2 focus:ring-blue-500/50" />
-                </div>
-                <div className="flex gap-1.5 flex-wrap justify-end">
+                <div className="flex gap-1.5 flex-wrap">
                   {(Object.keys(STATUS_CONFIG) as AppointmentStatus[]).map(status => (
                     <button key={status} onClick={() => setActiveStatusFilters(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status])} className={`px-3 py-2 rounded-xl text-[8px] font-black uppercase border transition-all ${activeStatusFilters.includes(status) ? `${STATUS_CONFIG[status].bg} ${STATUS_CONFIG[status].color} ${STATUS_CONFIG[status].border} shadow-lg shadow-${STATUS_CONFIG[status].color.split('-')[1]}-500/10` : 'bg-slate-800 text-slate-500 border-slate-700 opacity-30 hover:opacity-50'}`}>
                       {STATUS_CONFIG[status].label}
@@ -783,52 +857,34 @@ const App: React.FC = () => {
                 <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-900/50 p-2 space-y-5">
                    {(() => {
                       const KPIGrid = ({ title, data, colors, labels }: { title: string, data: { prev: any, curr: any, next: any }, colors: string[], labels: string[] }) => (
-                        <div className="bg-slate-800/40 rounded-xl border border-slate-800 overflow-hidden uppercase font-black">
+                        <div className="bg-slate-800/40 rounded-xl border border-slate-800 overflow-hidden uppercase font-black text-[7px]">
                            <div className="p-2 border-b border-slate-800 bg-slate-800/20 text-center">
                               <span className="text-[9px] text-white tracking-[0.2em]">{title}</span>
                            </div>
-                           <div className="flex flex-col text-[7px]">
-                              {/* Headers Row */}
+                           <div className="flex flex-col">
                               <div className="grid grid-cols-5 bg-slate-800/10 text-slate-500 py-1 border-b border-slate-800/30">
                                 <div className="col-span-2 px-2">INDI.</div>
                                 <div className="text-center">{labels[0]}</div>
                                 <div className={`text-center ${colors[1]}`}>{labels[1]}</div>
                                 <div className={`text-center ${colors[2]}`}>{labels[2]}</div>
                               </div>
-                              {/* Volume Row */}
                               <div className="grid grid-cols-5 border-t border-slate-800/30 items-center py-1.5">
                                 <div className="col-span-2 px-2 flex items-center gap-1.5"><FileText size={8} className="text-slate-600" /> VOLUME</div>
                                 <div className="text-center text-[9px] text-slate-500">{data.prev.count}</div>
                                 <div className={`text-center text-[10px] ${colors[1]}`}>{data.curr.count}</div>
                                 <div className={`text-center text-[9px] ${colors[2]}`}>{data.next.count}</div>
                               </div>
-                              {/* CA HT Row */}
                               <div className="grid grid-cols-5 border-t border-slate-800/30 items-center py-1.5 bg-white/[0.01]">
-                                <div className="col-span-2 px-2 flex items-center gap-1.5"><Euro size={8} className="text-emerald-600" /> CA HT (€)</div>
-                                <div className="text-center text-[8px] text-slate-500">{Math.round(data.prev.ca).toLocaleString('fr-FR')}</div>
-                                <div className={`text-center text-[9px] ${colors[1]}`}>{Math.round(data.curr.ca).toLocaleString('fr-FR')}</div>
-                                <div className={`text-center text-[8px] ${colors[2]}`}>{Math.round(data.next.ca).toLocaleString('fr-FR')}</div>
+                                <div className="col-span-2 px-2 flex items-center gap-1.5"><Euro size={8} className="text-emerald-600" /> CA HT</div>
+                                <div className="text-center text-slate-500">{Math.round(data.prev.ca).toLocaleString('fr-FR')}</div>
+                                <div className={`text-center ${colors[1]}`}>{Math.round(data.curr.ca).toLocaleString('fr-FR')}</div>
+                                <div className={`text-center ${colors[2]}`}>{Math.round(data.next.ca).toLocaleString('fr-FR')}</div>
                               </div>
-                              {/* MO Row */}
                               <div className="grid grid-cols-5 border-t border-slate-800/30 items-center py-1.5">
                                 <div className="col-span-2 px-2 flex items-center gap-1.5"><Clock size={8} className="text-amber-600" /> H MO</div>
-                                <div className="text-center text-[9px] text-slate-500">{data.prev.hours.toFixed(0)}</div>
-                                <div className={`text-center text-[10px] ${colors[1]}`}>{data.curr.hours.toFixed(0)}</div>
-                                <div className={`text-center text-[9px] ${colors[2]}`}>{data.next.hours.toFixed(0)}</div>
-                              </div>
-                              {/* Clim Row */}
-                              <div className="grid grid-cols-5 border-t border-slate-800/30 items-center py-1.5 bg-sky-500/[0.02]">
-                                <div className="col-span-2 px-2 flex items-center gap-1.5"><Snowflake size={8} className="text-sky-500" /> CLIM</div>
-                                <div className="text-center text-[9px] text-slate-500">{data.prev.clim}</div>
-                                <div className={`text-center text-[10px] ${colors[1]}`}>{data.curr.clim}</div>
-                                <div className={`text-center text-[9px] ${colors[2]}`}>{data.next.clim}</div>
-                              </div>
-                              {/* Géo Row */}
-                              <div className="grid grid-cols-5 border-t border-slate-800/30 items-center py-1.5">
-                                <div className="col-span-2 px-2 flex items-center gap-1.5"><Compass size={8} className="text-amber-500" /> GÉO</div>
-                                <div className="text-center text-[9px] text-slate-500">{data.prev.geo}</div>
-                                <div className={`text-center text-[10px] ${colors[1]}`}>{data.curr.geo}</div>
-                                <div className={`text-center text-[9px] ${colors[2]}`}>{data.next.geo}</div>
+                                <div className="text-center text-slate-500">{data.prev.hours.toFixed(0)}</div>
+                                <div className={`text-center ${colors[1]}`}>{data.curr.hours.toFixed(0)}</div>
+                                <div className={`text-center ${colors[2]}`}>{data.next.hours.toFixed(0)}</div>
                               </div>
                            </div>
                         </div>
@@ -836,24 +892,9 @@ const App: React.FC = () => {
 
                       return (
                         <>
-                          <KPIGrid 
-                            title="SEMAINE" 
-                            labels={['S-1', 'S', 'S+1']} 
-                            data={kpis.weeks} 
-                            colors={['text-slate-500', 'text-blue-400', 'text-purple-400']} 
-                          />
-                          <KPIGrid 
-                            title="MOIS" 
-                            labels={['M-1', 'M', 'M+1']} 
-                            data={kpis.months} 
-                            colors={['text-slate-500', 'text-emerald-400', 'text-purple-400']} 
-                          />
-                          <KPIGrid 
-                            title="ANNEE" 
-                            labels={['N-1', 'N', 'N+1']} 
-                            data={kpis.years} 
-                            colors={['text-slate-500', 'text-indigo-400', 'text-purple-400']} 
-                          />
+                          <KPIGrid title="SEMAINE" labels={['S-1', 'S', 'S+1']} data={kpis.weeks} colors={['text-slate-500', 'text-blue-400', 'text-purple-400']} />
+                          <KPIGrid title="MOIS" labels={['M-1', 'M', 'M+1']} data={kpis.months} colors={['text-slate-500', 'text-emerald-400', 'text-purple-400']} />
+                          <KPIGrid title="ANNÉE" labels={['A-1', 'A', 'A+1']} data={kpis.years} colors={['text-slate-500', 'text-orange-400', 'text-purple-400']} />
                           <div className="p-3 text-[7px] text-slate-500 italic text-center uppercase tracking-tighter opacity-50">Basé sur la date de sortie renseignée</div>
                         </>
                       );
@@ -874,20 +915,19 @@ const App: React.FC = () => {
         <div className="flex items-center gap-3">
           {lastSaved && (
             <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-all duration-500 ${syncError ? 'bg-rose-500/10 border-rose-500/40 text-rose-500' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
-              <div className={`w-1.5 h-1.5 rounded-full shadow-[0_0_8px_currentColor] ${syncError ? 'bg-rose-500 animate-pulse' : isSyncing ? 'bg-blue-400 animate-bounce' : 'bg-emerald-500'}`} />
               <span className="font-black tracking-[0.05em] text-[7px]">
-                {syncError ? 'ERREUR DE SYNC' : isSyncing ? 'SYNCHRONISATION...' : `À JOUR : ${lastSaved.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}`}
+                {syncError ? 'ERREUR DE SYNC' : isSyncing ? 'SYNC...' : `À JOUR : ${lastSaved.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}`}
               </span>
-              {!syncError && !isSyncing && <CheckCircle2 size={10} className="opacity-60" />}
             </div>
           )}
           <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700 shadow-inner">
-            <button onClick={() => handleLoadFromSheets()} title="Forcer le rafraîchissement" className={`p-1 rounded transition-all hover:bg-slate-700 ${isSyncing ? 'animate-spin text-blue-400' : 'text-blue-400'}`}><RefreshCw size={12} /></button>
-            <button onClick={handleSyncToSheets} disabled={isSyncing} className={`px-2 py-1 rounded text-[8px] font-black uppercase transition-all flex items-center gap-1 ${isSyncing ? 'bg-blue-900/50 text-blue-300 opacity-50 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-50'}`}><Cloud size={10} /> {isSyncing ? '...' : 'CLOUD'}</button>
+            <button onClick={() => handleLoadFromSheets()} title="Rafraîchir" className={`p-1 rounded transition-all hover:bg-slate-700 ${isSyncing ? 'animate-spin text-blue-400' : 'text-blue-400'}`}><RefreshCw size={12} /></button>
+            <button onClick={handleSyncToSheets} disabled={isSyncing} className={`px-2 py-1 rounded text-[8px] font-black uppercase transition-all flex items-center gap-1 ${isSyncing ? 'bg-blue-900/50 text-blue-300 opacity-50 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-50'}`}><Cloud size={10} /> CLOUD</button>
           </div>
         </div>
       </footer>
 
+      {/* Forms and Modals */}
       {tempApt && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col uppercase text-slate-900 my-4 animate-in fade-in zoom-in-95 duration-200 print-modal">
@@ -901,7 +941,7 @@ const App: React.FC = () => {
               <button onClick={() => { setEditingAptId(null); setNewAptData(null); setTempApt(null); }} className="hover:rotate-90 transition-transform no-print"><X size={18}/></button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); handleSaveAppointment(tempApt); }} className="flex flex-col h-full overflow-hidden bg-white">
-              <div className="p-4 space-y-4 overflow-y-auto flex-1">
+              <div className="p-4 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
                 {tempApt.status === 'annule' && (
                   <div className="bg-rose-50 border border-rose-200 p-3 rounded-lg flex items-center gap-3 text-rose-700 font-black text-[10px] mb-2 animate-pulse">
                     <AlertCircle size={20} /> DOSSIER ANNULÉ LE {new Date(tempApt.deletedAt || "").toLocaleDateString('fr-FR')} - VISIBLE UNIQUEMENT DANS L'HISTORIQUE ET ACTIVITÉ
@@ -938,8 +978,8 @@ const App: React.FC = () => {
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">CLIM</label><button type="button" onClick={() => setTempApt({...tempApt, hasClim: !tempApt.hasClim})} className={`w-full p-1 rounded-lg border shadow-sm flex items-center justify-center h-[25px] ${tempApt.hasClim ? 'bg-sky-100 border-sky-500 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-400 opacity-40'}`}><Snowflake size={14} /></button></div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Date Entrée</label><input type="date" name="date" value={tempApt.date} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 text-[10px] outline-none text-black" /></div>
-                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Heure Entrée</label><input type="time" name="appointmentHour" value={tempApt.appointmentHour} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 text-[10px] outline-none text-black" /></div>
+                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Date Entrée</label><input type="date" name="date" value={tempApt.date} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
+                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Heure Entrée</label><input type="time" name="appointmentHour" value={tempApt.appointmentHour} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DUREE IMMO (jours)</label><input type="number" step="0.5" name="estimatedDuration" value={tempApt.estimatedDuration || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-black text-[10px] outline-none text-black" /></div>
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DATE SORTIE</label><input type="date" name="exitDate" value={tempApt.exitDate || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" /></div>
                       </div>
@@ -1020,9 +1060,9 @@ const App: React.FC = () => {
                 <>
                   <div className={`px-6 py-2 flex items-center justify-between text-white font-black shrink-0 h-[48px] ${tempVRBooking.status === 'annule' ? 'bg-rose-900' : 'bg-blue-600'}`}>
                     <h2 className="text-xs tracking-widest flex items-center gap-2 uppercase"><Car size={14} /> RESERVATION {linkedVr?.immatriculation} - {linkedVr?.modele} | {tempVRBooking.clientName} {tempVRBooking.status === 'annule' && "(ANNULÉE)"}</h2>
-                    <button onClick={() => { setEditingVRBookingId(null); setTempVRBooking(null); setShowVrSelector(false); }} className="hover:rotate-90 transition-transform"><X size={18}/></button>
+                    <button onClick={() => { setEditingVRBookingId(null); setTempVRBooking(null); }} className="hover:rotate-90 transition-transform"><X size={18}/></button>
                   </div>
-                  <div className="p-6 space-y-6 overflow-y-auto max-h-[85vh]">
+                  <div className="p-6 space-y-6 overflow-y-auto max-h-[85vh] custom-scrollbar">
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between mb-4">
                        <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600"><Car size={16}/></div>
@@ -1071,7 +1111,7 @@ const App: React.FC = () => {
 
                     <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
                       <button type="button" onClick={() => handleDeleteVRBooking(tempVRBooking.id)} className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase border border-rose-500 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center gap-2"><Trash2 size={16}/> {tempVRBooking.status === 'annule' ? 'SUPPRIMER DÉF.' : 'ANNULER RÉSER.'}</button>
-                      <button type="button" onClick={() => handleSaveVRBooking(tempVRBooking)} className="px-10 py-2.5 rounded-xl text-[10px] font-black uppercase bg-blue-600 text-white hover:bg-blue-500 shadow-xl flex items-center gap-2 transition-all active:scale-95"><Save size={16}/> ENREGISTRER</button>
+                      <button type="button" onClick={() => handleSaveVRBooking(tempVRBooking)} className="px-10 py-2.5 rounded-xl text-[10px] font-black uppercase bg-blue-600 text-white hover:bg-blue-50 shadow-xl flex items-center gap-2 transition-all active:scale-95"><Save size={16}/> ENREGISTRER</button>
                     </div>
                   </div>
                 </>
@@ -1134,11 +1174,11 @@ const App: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col uppercase text-slate-900 border border-white/20">
             <div className="bg-[#1e293b] px-6 py-3 flex items-center justify-between text-white font-black shrink-0 h-[48px]"><h2 className="text-xs tracking-[0.2em] flex items-center gap-3"><Car size={18} className="text-blue-400" /> ADMINISTRATION DE LA FLOTTE VR</h2><button onClick={() => setIsVRManagerOpen(false)} className="hover:rotate-90 transition-transform p-1.5 bg-slate-800 rounded-full"><X size={16}/></button></div>
             <div className="flex-1 overflow-hidden flex">
-              <div className="w-[300px] border-r border-slate-200 bg-slate-50 overflow-y-auto p-3 space-y-2 flex flex-col shrink-0">
+              <div className="w-[300px] border-r border-slate-200 bg-slate-50 overflow-y-auto p-3 space-y-2 flex flex-col shrink-0 custom-scrollbar">
                 <button onClick={handleAddNewVR} className="w-full flex items-center justify-center gap-2 bg-[#2563eb] text-white rounded-xl py-2.5 font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95"><Plus size={16} /> AJOUTER UN VÉHICULE</button>
-                <div className="space-y-2 flex-1">{vrFleet.map(vr => { const todayStr = new Date().toISOString().split('T')[0]; const currentBooking = vrBookings.find(b => b.vrId === vr.id && b.status !== 'annule' && b.startDate <= todayStr && b.endDate >= todayStr && (!b.endMileage || b.endMileage === 0)); return (<div key={vr.id} className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col gap-2 relative ${!vr.isVisible ? 'bg-slate-200/50 grayscale' : 'bg-white shadow-sm hover:shadow-md'} ${editingVrDataId === vr.id ? 'border-[#2563eb] ring-1 ring-[#2563eb]/20' : 'border-slate-100'}`} onClick={() => setEditingVrDataId(vr.id)}><div className="flex items-center justify-between relative z-10"><div className="min-w-0"><div className="text-[11px] font-black text-slate-900 truncate uppercase">{vr.immatriculation}</div><div className="text-[7.5px] font-bold text-slate-400 truncate uppercase">{vr.marque} {vr.modele}</div></div><div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); handleUpdateVrFleetMember(vr.id, { isVisible: !vr.isVisible }); }} className={`p-1 rounded-lg ${vr.isVisible ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>{vr.isVisible ? <Eye size={12}/> : <EyeOff size={12}/>}</button><button onClick={(e) => { e.stopPropagation(); handleDeleteVR(vr.id); }} className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><Trash2 size={12}/></button></div></div><div className="flex flex-col gap-1"><div className={`text-[7.5px] font-black px-2 py-0.5 rounded-md inline-flex items-center gap-1.5 uppercase ${vr.isVisible ? (currentBooking ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600') : 'bg-slate-100 text-slate-500'}`}><div className={`w-1.5 h-1.5 rounded-full ${vr.isVisible ? (currentBooking ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse') : 'bg-slate-400'}`} />{vr.isVisible ? (currentBooking ? 'En Location' : 'Disponible') : 'Inactif'}</div>{currentBooking && (<div className="bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100 flex flex-col gap-0.5"><div className="flex items-center gap-1.5"><UserCircle size={10}/><span className="text-[8px] font-black uppercase truncate">{currentBooking.clientName}</span></div><div className="flex items-center gap-1.5"><Clock size={10}/><span className="text-[7.5px] font-bold">RETOUR : {new Date(currentBooking.endDate).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})}</span></div></div>)}</div></div>); })}</div>
+                <div className="space-y-2 flex-1">{vrFleet.map(vr => { const todayStr = toLocalDateStr(new Date()); const currentBooking = vrBookings.find(b => b.vrId === vr.id && b.status !== 'annule' && b.startDate <= todayStr && b.endDate >= todayStr && (!b.endMileage || b.endMileage === 0)); return (<div key={vr.id} className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col gap-2 relative ${!vr.isVisible ? 'bg-slate-200/50 grayscale' : 'bg-white shadow-sm hover:shadow-md'} ${editingVrDataId === vr.id ? 'border-[#2563eb] ring-1 ring-[#2563eb]/20' : 'border-slate-100'}`} onClick={() => setEditingVrDataId(vr.id)}><div className="flex items-center justify-between relative z-10"><div className="min-w-0"><div className="text-[11px] font-black text-slate-900 truncate uppercase">{vr.immatriculation}</div><div className="text-[7.5px] font-bold text-slate-400 truncate uppercase">{vr.marque} {vr.modele}</div></div><div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); handleUpdateVrFleetMember(vr.id, { isVisible: !vr.isVisible }); }} className={`p-1 rounded-lg ${vr.isVisible ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>{vr.isVisible ? <Eye size={12}/> : <EyeOff size={12}/>}</button><button onClick={(e) => { e.stopPropagation(); handleDeleteVR(vr.id); }} className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><Trash2 size={12}/></button></div></div><div className="flex flex-col gap-1"><div className={`text-[7.5px] font-black px-2 py-0.5 rounded-md inline-flex items-center gap-1.5 uppercase ${vr.isVisible ? (currentBooking ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600') : 'bg-slate-100 text-slate-500'}`}><div className={`w-1.5 h-1.5 rounded-full ${vr.isVisible ? (currentBooking ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse') : 'bg-slate-400'}`} />{vr.isVisible ? (currentBooking ? 'En Location' : 'Disponible') : 'Inactif'}</div>{currentBooking && (<div className="bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100 flex flex-col gap-0.5"><div className="flex items-center gap-1.5"><UserCircle size={10}/><span className="text-[8px] font-black uppercase truncate">{currentBooking.clientName}</span></div><div className="flex items-center gap-1.5"><Clock size={10}/><span className="text-[7.5px] font-bold">RETOUR : {new Date(currentBooking.endDate).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'})}</span></div></div>)}</div></div>); })}</div>
               </div>
-              <div className="flex-1 bg-white overflow-y-auto">
+              <div className="flex-1 bg-white overflow-y-auto custom-scrollbar">
                 {editingVrData ? (
                   <div className="p-5 max-w-4xl mx-auto space-y-5 relative">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-4"><div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-[#2563eb] shadow-inner"><Car size={24} /></div><div><h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">{editingVrData.immatriculation || "NOUVEAU VÉHICULE"}</h3><p className="text-slate-400 text-[8px] font-black uppercase">Édition des caractéristiques véhicule</p></div></div><button onClick={() => setShowingHistoryForVrId(editingVrData.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all font-black text-[9px] uppercase"><History size={14}/> Historique</button></div>
@@ -1177,7 +1217,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[900] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col uppercase text-slate-900">
             <div className="bg-slate-800 px-6 py-3 flex items-center justify-between text-white font-black shrink-0"><h2 className="text-xs tracking-[0.2em] flex items-center gap-3"><History size={16} /> Historique des mouvements : {vrFleet.find(v => v.id === showingHistoryForVrId)?.immatriculation}</h2><button onClick={() => setShowingHistoryForVrId(null)} className="hover:rotate-90 transition-transform p-1 bg-white/10 rounded-full"><X size={16}/></button></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 custom-scrollbar">
                {vrBookings.filter(b => b.vrId === showingHistoryForVrId).sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map(booking => (
                  <div key={booking.id} className={`bg-white border rounded-xl p-4 shadow-sm grid grid-cols-12 gap-4 ${booking.status === 'annule' ? 'opacity-50 grayscale bg-rose-50' : ''}`}>
                     <div className="col-span-3"><span className="text-[7px] font-black text-slate-400 block mb-1">CLIENT</span><span className="text-[11px] font-black text-slate-900">{booking.clientName} {booking.status === 'annule' && "(ANNULÉ)"}</span></div>

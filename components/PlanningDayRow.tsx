@@ -1,15 +1,14 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { DayData, LaborTimes, VRBooking, VRData } from '../types';
 import AppointmentCard from './AppointmentCard';
 import { ROW_HEIGHT_PX, FRENCH_HOLIDAYS_2026 } from '../constants';
-import { Plus, Lock, Unlock, StickyNote, Car, Wrench, AlertTriangle } from 'lucide-react';
+import { Plus, Lock, Unlock, StickyNote, Car } from 'lucide-react';
 
 interface PlanningDayRowProps {
   dayData: DayData;
   activeVrs: VRData[];
   allVrBookings: VRBooking[];
-  isBlocked: boolean;
+  isBlocked: boolean; 
   onToggleBlock: () => void;
   onDropAppointment: (id: string, newDate: string) => void;
   onDropNote: (sourceDate: string, targetDate: string) => void;
@@ -23,6 +22,14 @@ interface PlanningDayRowProps {
   onCreateVRFromAppointment: (aptId: string, vid: string, date: string, hour: number) => void;
   zIndex: number;
 }
+
+const getISOWeek = (date: Date) => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
 
 const PlanningDayRow: React.FC<PlanningDayRowProps> = ({ 
   dayData, activeVrs, allVrBookings, isBlocked, onToggleBlock, onDropAppointment, onDropNote, onEditAppointment, onEditVRBooking, onResizeVRStart, onMoveVRBooking, onUpdateVRBookingTime, onAddAppointment, onEditNote, onCreateVRFromAppointment, zIndex
@@ -38,50 +45,50 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const BANNER_HEIGHT = 26;
-  const CONTENT_HEIGHT = ROW_HEIGHT_PX - BANNER_HEIGHT;
-  const hourHeight = CONTENT_HEIGHT / 10;
+  const BANNER_HEIGHT = 28; 
+  const GRID_HEIGHT = ROW_HEIGHT_PX - BANNER_HEIGHT; // 100px
+  const hourHeight = 10; // 100px / 10 créneaux (8h-18h)
+  
   const dateObj = useMemo(() => new Date(date), [date]);
-  const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+  const weekNum = useMemo(() => getISOWeek(dateObj), [dateObj]);
   const holidayName = FRENCH_HOLIDAYS_2026[date];
-  const isVisuallyClosed = isWeekend || !!holidayName || isBlocked;
-  const isToday = useMemo(() => date === currentTime.toISOString().split('T')[0], [date, currentTime]);
+  
+  const todayStr = useMemo(() => currentTime.toISOString().split('T')[0], [currentTime]);
+  const isToday = date === todayStr;
 
-  const totalTimes = appointments.reduce((acc, curr) => ({
-    t1: acc.t1 + curr.laborTimes.t1, t2: acc.t2 + curr.laborTimes.t2, tp: acc.tp + curr.laborTimes.tp, meca: acc.meca + curr.laborTimes.meca,
-  }), { t1: 0, t2: 0, tp: 0, meca: 0 } as LaborTimes);
+  const blockReason = useMemo(() => {
+    if (!isBlocked) return "";
+    if (holidayName) return holidayName.toUpperCase();
+    const day = dateObj.getDay();
+    if (day === 0 || day === 6) return "WEEK-END";
+    return "JOUR FERMÉ";
+  }, [isBlocked, holidayName, dateObj]);
+
+  const statusBgClass = useMemo(() => {
+    if (isBlocked) return 'bg-[#ea580c]'; 
+    if (isToday) return 'bg-blue-600';     
+    return 'bg-slate-800';                
+  }, [isBlocked, isToday]);
 
   const timeToDecimal = (timeStr: string): number => {
     if (!timeStr) return 8;
     const [h, m] = timeStr.split(':').map(Number);
-    const decimal = h + (m / 60);
-    return Math.max(8, Math.min(18, decimal));
+    // On bride strictement entre 8h et 18h pour l'affichage visuel
+    return Math.max(8, Math.min(18, h + (m / 60)));
   };
 
-  const calculateTop = (timeStr: string) => {
-    const decimal = timeToDecimal(timeStr);
-    return (decimal - 8) * hourHeight;
-  };
-
-  const getBannerStyles = () => {
-    if (isBlocked || holidayName || isWeekend) return 'bg-amber-600 border-amber-700';
-    if (isToday) return 'bg-[#0369a1] border-sky-800';
-    return 'bg-[#1e40af] border-blue-900/10';
-  };
+  const calculateTop = (timeStr: string) => (timeToDecimal(timeStr) - 8) * hourHeight;
 
   const redLineTop = useMemo(() => {
-    if (!isToday) return null;
+    if (!isToday || isBlocked) return null;
     const hours = currentTime.getHours();
     if (hours < 8 || hours >= 18) return null;
     return (hours + currentTime.getMinutes() / 60 - 8) * hourHeight;
-  }, [isToday, currentTime, hourHeight]);
+  }, [isToday, currentTime, hourHeight, isBlocked]);
 
-  // Calcul complexe des réservations avec détection de chevauchement et index d'empilement
   const processedVrBookings = useMemo(() => {
     const carData: Record<string, any[]> = {};
-    
     activeVrs.forEach(vr => {
-      // 1. Filtrer et trier les réservations du jour pour ce VR
       const dayBookings = allVrBookings
         .filter(b => b.vrId === vr.id && b.startDate <= date && b.endDate >= date && b.status !== 'annule')
         .map(b => ({
@@ -91,162 +98,220 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
         }))
         .sort((a, b) => a.startDec - b.startDec || a.endDec - b.endDec);
 
-      // 2. Assigner un index d'empilement (overlapIndex) pour le décalage horizontal
-      const assigned = dayBookings.map((b, i) => {
+      carData[vr.id] = dayBookings.map((b, i) => {
         let overlapIndex = 0;
         let hasConflict = false;
-        
-        // Comparer avec toutes les autres réservations du jour pour ce véhicule
         for (let j = 0; j < dayBookings.length; j++) {
           if (i === j) continue;
           const other = dayBookings[j];
-          
-          // Détection de chevauchement temporel
-          const isOverlapping = b.startDec < other.endDec && other.startDec < b.endDec;
-          
-          if (isOverlapping) {
+          if (b.startDec < other.endDec && other.startDec < b.endDec) {
             hasConflict = true;
-            // On incrémente l'index seulement si l'autre réservation a commencé avant 
-            // ou si elle a commencé en même temps mais possède un index plus petit (ordre du tableau)
-            if (other.startDec < b.startDec || (other.startDec === b.startDec && j < i)) {
-              overlapIndex++;
-            }
+            if (other.startDec < b.startDec || (other.startDec === b.startDec && j < i)) overlapIndex++;
           }
         }
         return { ...b, overlapIndex, hasConflict };
       });
-
-      carData[vr.id] = assigned;
     });
-
     return carData;
   }, [activeVrs, allVrBookings, date]);
 
+  const totalTimes = appointments.reduce((acc, curr) => ({
+    t1: acc.t1 + curr.laborTimes.t1, t2: acc.t2 + curr.laborTimes.t2, tp: acc.tp + curr.laborTimes.tp, meca: acc.meca + curr.laborTimes.meca,
+  }), { t1: 0, t2: 0, tp: 0, meca: 0 } as LaborTimes);
+
   return (
-    <div className={`flex flex-col border-b border-slate-200/50 relative overflow-visible ${isVisuallyClosed ? 'opacity-90' : ''}`} style={{ zIndex }}>
-      <div className={`flex items-center text-white justify-between sticky left-0 z-10 border-b shadow-sm ${getBannerStyles()}`} style={{ height: `${BANNER_HEIGHT}px` }}>
-        <div className={`w-[320px] shrink-0 h-full border-r flex items-center bg-black/20 ${isVisuallyClosed ? 'border-amber-700/20' : 'border-slate-300/10'}`}>
-          <div className="w-[28px] shrink-0 h-full border-r border-white/5 flex items-center justify-center bg-black/10">
-            <Car size={10} className="text-yellow-400" />
-          </div>
-          <div className="flex-1 flex h-full">
-            {activeVrs.map((vr) => (
-              <div key={vr.id} className="flex-1 h-full flex flex-col items-center justify-center border-r last:border-0 border-white/5 bg-black/5 overflow-hidden">
-                <span className="text-[7px] font-black uppercase tracking-tighter whitespace-nowrap">{vr.immatriculation}</span>
-              </div>
-            ))}
-          </div>
+    <div 
+      className={`flex flex-col border-b border-slate-700/50 relative overflow-visible transition-all duration-300 ${isBlocked ? 'bg-[#0f172a]' : 'bg-[#101827]'}`} 
+      style={{ zIndex, minHeight: isBlocked ? `${BANNER_HEIGHT}px` : `${ROW_HEIGHT_PX}px` }}
+    >
+      
+      {/* 1. HEADER COMPACT (28px) */}
+      <div className={`flex h-[${BANNER_HEIGHT}px] ${statusBgClass} border-b border-white/10 items-stretch sticky top-0 left-0 z-[110] shadow-xl overflow-hidden`} style={{ height: `${BANNER_HEIGHT}px` }}>
+        
+        <div className="w-[32px] shrink-0 flex items-center justify-center border-r border-white/5 bg-black/10">
+          <Car size={13} className="text-white" />
         </div>
-        <div className="flex-1 flex items-center justify-between px-3 h-full">
-          <div className="flex items-center gap-3 h-full">
-            <button onClick={onToggleBlock} className={`p-1 rounded hover:bg-white/10 transition-colors ${isBlocked ? 'text-amber-200' : 'text-white/40'}`}>
-              {isBlocked ? <Lock size={12} /> : <Unlock size={12} />}
-            </button>
-            <span className="text-[9px] font-black uppercase tracking-widest min-w-[200px] flex items-center gap-2">
-              <Wrench size={10} className="text-sky-300 opacity-60" />
-              {dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' }).toUpperCase()}
-            </span>
-            <div className="flex items-center gap-1.5 ml-2 h-full">
-              {!isBlocked && (
-                <button onClick={() => onAddAppointment(date)} className="flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white px-3 h-[20px] rounded text-[7px] font-black uppercase shadow-sm transition-all active:scale-95 self-center">
-                  <Plus size={10} /> RDV
-                </button>
-              )}
-              <button onClick={() => onEditNote(date)} className={`flex items-center gap-1.5 px-3 h-[20px] rounded text-[7px] font-black uppercase transition-all shadow-sm border self-center ${note ? 'bg-yellow-400 text-slate-900 border-yellow-500' : 'bg-white/10 text-white border-white/10'}`}>
-                <StickyNote size={10} /> NOTE
-              </button>
-            </div>
-          </div>
-          {!isBlocked && (
-            <div className="flex items-center gap-3 bg-black/10 px-2 py-0.5 rounded-full border border-white/5 font-mono text-[8px] font-black tracking-tighter">
-              <div className="flex gap-2">
-                <span>T1:{totalTimes.t1.toFixed(1)}</span>
-                <span>T2:{totalTimes.t2.toFixed(1)}</span>
-                <span>TP:{totalTimes.tp.toFixed(1)}</span>
-                <span className="text-sky-300">MC:{totalTimes.meca.toFixed(1)}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
-      <div ref={containerRef} className="flex overflow-visible relative" style={{ height: `${CONTENT_HEIGHT}px` }}>
-        {/* BLOC VR (GAUCHE) */}
-        <div className={`w-[320px] flex border-r-2 border-slate-300 shrink-0 relative z-20 ${isVisuallyClosed ? 'bg-amber-50/10 border-amber-100/30' : isToday ? 'bg-sky-50/50 border-sky-100' : 'bg-slate-50 border-slate-200'}`}>
-           <div className="w-[28px] shrink-0 h-full border-r border-slate-200/50 flex flex-col pointer-events-none bg-slate-100/30">
-              {Array.from({length: 10}).map((_, i) => (
-                <div key={i} className="flex-1 flex items-center justify-center border-b border-slate-200/20 text-[6px] font-black text-slate-400">
-                  {i+8}H
-                </div>
-              ))}
-           </div>
-           {redLineTop !== null && <div className="absolute left-[28px] right-0 border-t border-red-500/80 z-[150]" style={{ top: `${redLineTop}px` }}><div className="absolute -left-1 -top-[4px] w-2 h-2 rounded-full bg-red-600 shadow-sm" /></div>}
+        <div className="w-[288px] flex shrink-0 border-r border-white/10 bg-black/10">
            {activeVrs.map((vr) => (
-             <div key={vr.id} className={`flex-1 border-r last:border-0 relative flex flex-col ${isVisuallyClosed ? 'border-amber-200/20' : 'border-slate-200/40'}`}>
-               {Array.from({ length: 10 }).map((_, h) => (
-                 <div key={h} onDragOver={(e) => { e.preventDefault(); if (!isBlocked) setDragOverVR({vrId: vr.id, hour: h+8}); }} onDragLeave={() => setDragOverVR(null)} onDrop={(e) => { e.preventDefault(); setDragOverVR(null); if (isBlocked) return; const bid = e.dataTransfer.getData('vrBookingId'); const aid = e.dataTransfer.getData('appointmentId'); if (bid) onMoveVRBooking(bid, vr.id); else if (aid) onCreateVRFromAppointment(aid, vr.id, date, h+8); }} className={`flex-1 border-b border-slate-200/10 relative ${dragOverVR?.vrId === vr.id && dragOverVR?.hour === h+8 ? 'bg-yellow-500/20' : ''}`}></div>
-               ))}
-               {(processedVrBookings[vr.id] || []).map(booking => {
-                  const top = calculateTop(booking.startDate < date ? '08:00' : booking.startHour);
-                  const bottom = calculateTop(booking.endDate > date ? '18:00' : booking.endHour);
-                  const height = Math.max(14, bottom - top);
-                  
-                  const isReturned = booking.endMileage !== undefined && booking.endMileage > 0;
-                  const todayStr = new Date().toISOString().split('T')[0];
-                  const isFuture = booking.startDate > todayStr;
-                  const isCurrent = !isReturned && !isFuture;
-
-                  let colorClass = 'bg-yellow-400 border-yellow-500 text-slate-900'; 
-                  if (isReturned) colorClass = 'bg-emerald-500 border-emerald-600 text-white';
-                  else if (isCurrent) colorClass = 'bg-blue-500 border-blue-600 text-white';
-                  
-                  // Calcul de la marge à gauche et de la réduction de largeur en cas de conflit
-                  const horizontalOffset = booking.overlapIndex * 8;
-                  const widthAdjustment = booking.overlapIndex * 4;
-                  const zIndexBase = 100 + booking.overlapIndex;
-
-                  return (
-                    <div 
-                      key={booking.id} 
-                      draggable={!isBlocked} 
-                      onDragStart={(e) => { if (isBlocked) return; e.dataTransfer.setData('vrBookingId', booking.id); }} 
-                      onDoubleClick={(e) => { e.stopPropagation(); onEditVRBooking(booking.id); }} 
-                      className={`absolute border rounded shadow-md flex flex-col cursor-move overflow-hidden transition-all duration-150 ${isBlocked ? 'opacity-40' : 'opacity-100'} ${colorClass} group/vr ${booking.hasConflict ? 'animate-blink-overlap' : ''}`} 
-                      style={{ 
-                        top: `${top + 1}px`, 
-                        height: `${height - 2}px`,
-                        left: `${1 + horizontalOffset}px`,
-                        right: `${1}px`,
-                        width: `calc(100% - ${2 + horizontalOffset + widthAdjustment}px)`,
-                        zIndex: zIndexBase
-                      }}
-                    >
-                       <div className="flex-1 px-1 flex flex-col items-center justify-center text-center overflow-hidden pointer-events-none">
-                         {booking.hasConflict && <AlertTriangle size={10} className="mb-0.5 shrink-0" />}
-                         <span className="text-[7px] font-black uppercase leading-tight truncate w-full px-0.5">{booking.clientName}</span>
-                       </div>
-                    </div>
-                  );
-               })}
+             <div key={vr.id} className="flex-1 border-r border-white/5 last:border-0 flex flex-col items-center justify-center leading-none px-1 overflow-hidden">
+               <span className="text-[10px] font-black text-white truncate w-full text-center uppercase tracking-tight">{vr.immatriculation}</span>
+               <span className="text-[7px] font-bold text-white/50 truncate w-full text-center uppercase">{vr.modele}</span>
              </div>
            ))}
         </div>
 
-        {/* BLOC CHANTIER (DROITE) */}
-        <div onDragOver={(e) => { e.preventDefault(); setIsOverWorkshop(true); }} onDragLeave={() => setIsOverWorkshop(false)} onDrop={(e) => { e.preventDefault(); setIsOverWorkshop(false); const aid = e.dataTransfer.getData('appointmentId'); const noteSourceDate = e.dataTransfer.getData('noteDate'); if (aid) onDropAppointment(aid, date); if (noteSourceDate) onDropNote(noteSourceDate, date); }} className={`flex-1 flex items-center p-1.5 gap-2 overflow-x-auto min-h-full relative ${isOverWorkshop ? 'bg-blue-600/10' : isVisuallyClosed ? 'bg-amber-50/10' : 'bg-white'}`}>
-          {note && (
-            <div draggable={!isBlocked} onDragStart={(e) => { if (!isBlocked) e.dataTransfer.setData('noteDate', date); }} onClick={() => onEditNote(date)} className={`shrink-0 w-[180px] h-[94px] bg-yellow-50/50 border border-yellow-200/50 border-dashed rounded p-1.5 flex flex-col gap-1 cursor-pointer hover:bg-yellow-100/30 transition-colors ${!isBlocked ? 'cursor-move' : ''}`}>
-               <div className="flex items-center gap-1 text-yellow-700 font-black text-[7px] uppercase tracking-widest"><StickyNote size={8} /> Note du jour</div>
-               <div className="text-[8px] font-bold text-slate-600 leading-tight overflow-hidden line-clamp-6 whitespace-pre-wrap uppercase">{note}</div>
+        <div className="flex-1 flex items-center px-3">
+          <div className="flex items-center gap-2.5">
+            <button onClick={onToggleBlock} className="text-white/60 hover:text-white transition-colors">
+              {isBlocked ? <Lock size={11} /> : <Unlock size={11} />}
+            </button>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9.5px] font-black uppercase tracking-widest text-white">
+                {dateObj.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase()}
+              </span>
+              <div className="w-px h-3 bg-white/20" />
+              <span className="text-[7.5px] font-bold text-white/60 uppercase tracking-tighter">
+                S{String(weekNum).padStart(2, '0')}
+              </span>
             </div>
-          )}
-          {appointments.length === 0 && !note ? (
-            <div className="w-full text-center text-[10px] font-black uppercase tracking-[0.4em] opacity-5 select-none">CHANTIERS</div>
+          </div>
+
+          {!isBlocked ? (
+            <div className="flex-1 flex justify-end items-center gap-3">
+              <div className="flex items-center gap-2 bg-black/20 px-2 py-0.5 rounded border border-white/5 font-mono text-[7.5px] font-black">
+                <span className="text-white/40">T1:<span className="text-white">{totalTimes.t1.toFixed(1)}</span></span>
+                <span className="text-white/40">T2:<span className="text-white">{totalTimes.t2.toFixed(1)}</span></span>
+                <span className="text-white/40">TP:<span className="text-white">{totalTimes.tp.toFixed(1)}</span></span>
+                <span className="text-white/40">MC:<span className="text-sky-300">{totalTimes.meca.toFixed(1)}</span></span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => onEditNote(date)} className={`p-1 rounded-md border transition-all ${note ? 'bg-yellow-400 text-slate-950 border-yellow-500' : 'bg-white/10 text-white/60 border-white/10 hover:bg-white/20 hover:text-white'}`}>
+                  <StickyNote size={11}/>
+                </button>
+                <button onClick={() => onAddAppointment(date)} className="bg-white text-blue-600 h-[20px] px-2.5 rounded text-[8.5px] font-black uppercase hover:shadow-lg transition-all flex items-center gap-1">
+                  <Plus size={10}/> RDV
+                </button>
+              </div>
+            </div>
           ) : (
-            appointments.map((apt) => <AppointmentCard key={apt.id} appointment={apt} variant="summary" onEdit={onEditAppointment} />)
+            <div className="flex-1 flex justify-end items-center">
+               <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/90 italic">
+                 {blockReason}
+               </span>
+            </div>
           )}
         </div>
       </div>
+
+      {/* 2. ZONE DE CONTENU : 100px */}
+      {!isBlocked && (
+        <div ref={containerRef} className="flex relative flex-1 overflow-hidden" style={{ height: `${GRID_HEIGHT}px` }}>
+          
+          <div className="w-[320px] shrink-0 flex border-r border-slate-700/50 bg-[#0f172a]/30 relative z-20">
+             
+             {/* Timeline Labels */}
+             <div className="w-[32px] shrink-0 h-full border-r border-slate-800 flex flex-col pointer-events-none bg-[#1e293b]/20">
+                {Array.from({length: 10}).map((_, i) => (
+                  <div key={i} className="flex items-center justify-center border-b border-slate-800/40 text-[6.5px] font-black text-slate-500" style={{ height: `${hourHeight}px` }}>
+                    {i+8}H
+                  </div>
+                ))}
+             </div>
+             
+             {redLineTop !== null && (
+               <div className="absolute left-0 right-[-1000px] border-t border-red-500/80 z-[100] pointer-events-none" style={{ top: `${redLineTop}px` }}>
+                 <div className="absolute left-[29px] -top-[3px] w-1.5 h-1.5 rounded-full bg-red-600 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+               </div>
+             )}
+
+             {activeVrs.map((vr) => (
+               <div key={vr.id} className="flex-1 border-r border-slate-800/50 last:border-0 relative flex flex-col group/vr-col">
+                 {/* Hour Grid Slots with fixed height to prevent rounding shifts */}
+                 {Array.from({ length: 10 }).map((_, h) => {
+                   const slotHour = 8 + h;
+                   return (
+                     <div 
+                      key={h} 
+                      onDragOver={(e) => { e.preventDefault(); setDragOverVR({vrId: vr.id, hour: slotHour}); }} 
+                      onDragLeave={() => setDragOverVR(null)} 
+                      onDrop={(e) => { 
+                        e.preventDefault(); 
+                        setDragOverVR(null); 
+                        const bid = e.dataTransfer.getData('vrBookingId'); 
+                        const aid = e.dataTransfer.getData('appointmentId'); 
+                        if (bid) onMoveVRBooking(bid, vr.id); 
+                        else if (aid) onCreateVRFromAppointment(aid, vr.id, date, slotHour); 
+                      }} 
+                      className={`border-b border-white/5 transition-colors ${dragOverVR?.vrId === vr.id && dragOverVR?.hour === slotHour ? 'bg-blue-600/30' : 'hover:bg-white/[0.02]'}`}
+                      style={{ height: `${hourHeight}px` }}
+                     />
+                   );
+                 })}
+
+                 {/* VR Booking Cards */}
+                 {(processedVrBookings[vr.id] || []).map(booking => {
+                    const top = calculateTop(booking.startDate < date ? '08:00' : booking.startHour);
+                    const bottom = calculateTop(booking.endDate > date ? '18:00' : booking.endHour);
+                    // Use exact difference to align with grid lines
+                    const height = bottom - top;
+                    
+                    const isReturned = booking.endMileage !== undefined && booking.endMileage > 0;
+                    const isCurrent = !isReturned && booking.startDate <= todayStr && booking.endDate >= todayStr;
+                    
+                    let bgColor = 'bg-[#fbbf24] border-[#d97706] text-slate-950'; 
+                    if (isReturned) bgColor = 'bg-emerald-600 border-emerald-400 text-white'; 
+                    if (isCurrent) bgColor = 'bg-blue-600 border-blue-400 text-white'; 
+
+                    const horizontalOffset = booking.overlapIndex * 3;
+
+                    return (
+                      <div 
+                        key={booking.id} 
+                        draggable 
+                        onDragStart={(e) => e.dataTransfer.setData('vrBookingId', booking.id)} 
+                        onDoubleClick={(e) => { e.stopPropagation(); onEditVRBooking(booking.id); }} 
+                        className={`absolute border rounded-[1px] shadow-sm flex flex-col cursor-pointer overflow-hidden transition-all group/booking box-border ${bgColor} ${booking.hasConflict ? 'animate-blink-overlap' : 'hover:z-[200]'}`} 
+                        style={{ 
+                          top: `${top}px`,
+                          height: `${height}px`,
+                          left: `${horizontalOffset}px`,
+                          width: `calc(100% - ${horizontalOffset}px)`, 
+                          zIndex: 10 + booking.overlapIndex
+                        }}
+                      >
+                         <div className="flex-1 px-1 flex flex-col items-center justify-center text-center overflow-hidden pointer-events-none leading-none">
+                           <span className="text-[7.5px] font-black uppercase truncate w-full tracking-tighter">{booking.clientName}</span>
+                         </div>
+                      </div>
+                    );
+                 })}
+               </div>
+             ))}
+          </div>
+
+          <div 
+            onDragOver={(e) => { e.preventDefault(); setIsOverWorkshop(true); }} 
+            onDragLeave={() => setIsOverWorkshop(false)} 
+            onDrop={(e) => { 
+              e.preventDefault(); 
+              setIsOverWorkshop(false); 
+              const aid = e.dataTransfer.getData('appointmentId'); 
+              const noteSourceDate = e.dataTransfer.getData('noteDate'); 
+              if (aid) onDropAppointment(aid, date); 
+              if (noteSourceDate) onDropNote(noteSourceDate, date); 
+            }} 
+            className={`flex-1 flex items-center px-4 py-1 gap-3 overflow-x-auto relative transition-colors duration-300 ${isOverWorkshop ? 'bg-blue-600/5' : ''}`}
+            style={{ overflowY: 'hidden' }}
+          >
+            {note && (
+              <div 
+                draggable 
+                onDragStart={(e) => e.dataTransfer.setData('noteDate', date)} 
+                onClick={() => onEditNote(date)} 
+                className="shrink-0 w-[240px] h-[94px] bg-yellow-400/5 border border-yellow-400/20 border-dashed rounded-xl p-3 flex flex-col gap-1.5 cursor-pointer hover:bg-yellow-400/10 transition-all cursor-move"
+              >
+                 <div className="flex items-center gap-1.5 text-yellow-500 font-black text-[8px] uppercase tracking-widest">
+                    <StickyNote size={11} /> Note du jour
+                 </div>
+                 <div className="text-[9px] font-bold text-slate-400 leading-tight overflow-hidden line-clamp-4 whitespace-pre-wrap uppercase">
+                    {note}
+                 </div>
+              </div>
+            )}
+
+            {appointments.length === 0 && !note && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-5">
+                <span className="text-[10px] font-black uppercase tracking-[0.6em] text-white">AUCUN CHANTIER</span>
+              </div>
+            )}
+
+            {appointments.map((apt) => (
+              <AppointmentCard key={apt.id} appointment={apt} variant="summary" onEdit={onEditAppointment} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

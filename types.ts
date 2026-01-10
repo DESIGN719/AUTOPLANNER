@@ -10,45 +10,62 @@ export type AppointmentStatus = 'stock' | 'a-venir' | 'en-cours' | 'livre' | 'li
 
 export type PRStatus = 'none' | 'a-commander' | 'commande' | 'recu';
 
+/**
+ * Correspondance Colonnes Google Sheets :
+ * A: id, B: status, C: clientName, D: immat, E: model, F: date, G: appointmentHour, 
+ * H: exitDate, I: estimatedDuration, J: intermediary, K: insurance, L: expert, 
+ * M: workType, N: notes, O: t1, P: t2, Q: tp, R: meca, S: prStatus, T: hasGeo, 
+ * U: hasClim, V: invoiceNumber, W: totalAmount, X: franchise, Y: commission, 
+ * Z: vrImmat, AA: vrInvoiceNumber, AB: vrInvoiceAmount, AC: billingDate, AD: paymentDate
+ */
 export interface Appointment {
+  // A - E
   id: string;
+  status: AppointmentStatus;
   clientName: string;
+  immat: string;
+  model: string;
+  
+  // F - I
+  date: string; 
+  appointmentHour: string; 
+  exitDate?: string;
+  estimatedDuration: number; // Durée Immo en jours
+  
+  // J - N
   intermediary?: string; 
   insurance: string;
   expert: string;
-  immat: string;
-  model: string;
   workType: string;
+  notes?: string;
+
+  // O - R
   laborTimes: LaborTimes;
-  date: string; 
-  appointmentHour: string; 
-  status: AppointmentStatus;
   
-  // Prestations spécifiques
+  // S - U
+  prStatus?: PRStatus; 
   hasGeo?: boolean;
   hasClim?: boolean;
-  prStatus?: PRStatus; 
   
-  exitDate?: string;
-  exitHour?: string;
-  estimatedDuration?: string; 
-  
-  billingDate?: string;
+  // V - Y
   invoiceNumber?: string;
-  totalAmount?: number; 
-  paymentDate?: string;
-  commission?: number;
+  totalAmount?: number; // Montant Travaux HT
   franchise?: number;
+  commission?: number;
   
-  hasVr?: boolean;
+  // Z - AB
   vrImmat?: string;
-  vrModel?: string;
-  isVrInvoiced?: boolean;
   vrInvoiceNumber?: string;
   vrInvoiceAmount?: number;
   
-  notes?: string;
-  deletedAt?: string; // Date d'annulation pour traçabilité
+  // AC - AD
+  billingDate?: string;
+  paymentDate?: string;
+
+  // Champs utilitaires UI
+  exitHour?: string;
+  hasVr?: boolean;
+  deletedAt?: string;
 }
 
 export interface VRData {

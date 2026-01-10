@@ -1,7 +1,7 @@
 
 export const DAYS_OF_WEEK = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
 export const VR_SLOTS_COUNT = 6;
-export const ROW_HEIGHT_PX = 130; 
+export const ROW_HEIGHT_PX = 128; // 28px (Bannière) + 100px (Contenu)
 
 export const STATUS_CONFIG: Record<string, { label: string; color: string; border: string; bg: string }> = {
   'stock': { label: 'Non planifié', color: 'text-slate-500', border: 'border-slate-300', bg: 'bg-slate-100' },
@@ -15,11 +15,11 @@ export const STATUS_CONFIG: Record<string, { label: string; color: string; borde
 };
 
 export const CATEGORY_COLORS = {
-  header: 'bg-blue-600',
+  header: 'bg-[#0f172a]',
   summary: 'bg-blue-100',
   appointment: 'bg-pink-500',
-  vr: 'bg-yellow-400',
-  border: 'border-slate-300'
+  vr: 'bg-[#fbbf24]',
+  border: 'border-slate-700'
 };
 
 export const FRENCH_HOLIDAYS_2026: Record<string, string> = {
