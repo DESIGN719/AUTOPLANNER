@@ -19,7 +19,7 @@ const STORAGE_KEYS = {
 const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyrWMfidSUH1b800rEAdSjuneTZEgKLRdzBzwhJ-p5vyi5rO9ZDWGIEf6i-VfvSpYiuAg/exec';
 
 const MOCK_APPOINTMENTS: Appointment[] = [
-  { id: '1', clientName: 'ABITBOL LOLA', insurance: 'AXA', expert: 'BOUVET', immat: 'DRS635', model: 'VW T-ROC', workType: 'CHOC AVANT GAUCHE - DEMONTAGE COMPLET', date: '2026-01-06', appointmentHour: '08:30', status: 'en-cours', laborTimes: { t1: 2.5, t2: 1.5, tp: 3, meca: 0 }, hasVr: true, vrImmat: 'AA-123-BB', hasGeo: true, prStatus: 'recu', exitDate: '2026-01-08', exitHour: '17:00', totalAmount: 2450, estimatedDuration: 2.5 },
+  { id: '1', clientName: 'ABITBOL LOLA', insurance: 'AXA', expert: 'BOUVET', immat: 'DRS635', model: 'VW T-ROC', workType: 'CHOC AVANT GAUCHE - DEMONTAGE COMPLET', date: '2026-01-06', appointmentHour: '08:30', status: 'en-cours', laborTimes: { t1: 2.5, t2: 1.5, tp: 3, meca: 0 }, hasVr: true, vrImmat: 'AA-123-BB', hasGeo: true, prStatus: 'recu', exitDate: '2026-01-08', exitHour: '17:00', totalAmount: 2450, estimatedDuration: 2.5, intermediary: 'GARAGE CENTRE' },
   { id: '2', clientName: 'DUMONT JEAN', insurance: 'MACIF', expert: 'LEGRAND', immat: 'HG-022-DD', model: 'PEUGEOT 208', workType: 'REVISION DES 60.000 KM + FREINS', date: '2026-01-07', appointmentHour: '09:00', status: 'a-venir', laborTimes: { t1: 0, t2: 0, tp: 0, meca: 3.5 }, hasVr: false, hasClim: true, prStatus: 'commande', totalAmount: 480, exitDate: '2026-01-07', estimatedDuration: 0.5 },
   { id: '3', clientName: 'MARTIN SOPHIE', insurance: 'ALLIANZ', expert: 'PETIT', immat: 'CC-999-ZZ', model: 'RENAULT CLIO IV', workType: 'REMPLACEMENT PARE-CHOC ARRIERE', date: '2026-01-05', appointmentHour: '08:00', status: 'livre', laborTimes: { t1: 1, t2: 0, tp: 1.5, meca: 0 }, hasVr: true, vrImmat: 'BB-456-CC', prStatus: 'recu', exitDate: '2026-01-05', exitHour: '18:00', totalAmount: 890, estimatedDuration: 1.0 }
 ];
@@ -117,8 +117,8 @@ const App: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>(() => getSafeStorage(STORAGE_KEYS.APPOINTMENTS, MOCK_APPOINTMENTS));
   const [stockAppointments, setStockAppointments] = useState<Appointment[]>(() => getSafeStorage(STORAGE_KEYS.STOCK, MOCK_STOCK));
   const [vrFleet, setVrFleet] = useState<VRData[]>(() => getSafeStorage(STORAGE_KEYS.VR_FLEET, [
-    { id: 'vr-1', immatriculation: 'AA-123-BB', marque: 'PEUGEOT', modele: '208', vin: 'VF3...', dateMiseEnCirculation: '2022-01-01', typeCarburant: 'Essence', niveauCarburant: 'Full', kilometrage: 12500, isVisible: true, slotPosition: 1, proprietaire: 'GARAGE PRO / SOCIÉTÉ X' },
-    { id: 'vr-2', immatriculation: 'BB-456-CC', marque: 'RENAULT', modele: 'CLIO', vin: 'VF1...', dateMiseEnCirculation: '2021-06-15', typeCarburant: 'Diesel', niveauCarburant: '3/4', kilometrage: 45000, isVisible: true, slotPosition: 2, proprietaire: 'GARAGE PRO / SOCIÉTÉ X' }
+    { id: 'vr-1', immatriculation: 'AA-123-BB', marque: 'PEUGEOT', modele: '208', vin: 'VF3...', typeCarburant: 'Essence', niveauCarburant: 'Full', kilometrage: 12500, isVisible: true, slotPosition: 1, proprietaire: 'GARAGE PRO / SOCIÉTÉ X' },
+    { id: 'vr-2', immatriculation: 'BB-456-CC', marque: 'RENAULT', modele: 'CLIO', vin: 'VF1...', typeCarburant: 'Diesel', niveauCarburant: '3/4', kilometrage: 45000, isVisible: true, slotPosition: 2, proprietaire: 'GARAGE PRO / SOCIÉTÉ X' }
   ]));
   const [vrBookings, setVrBookings] = useState<VRBooking[]>(() => getSafeStorage(STORAGE_KEYS.VR_BOOKINGS, []));
   const [manualOverrides, setManualOverrides] = useState<string[]>(() => getSafeStorage(STORAGE_KEYS.OVERRIDES, []));
@@ -225,7 +225,7 @@ const App: React.FC = () => {
   }, [appointments, stockAppointments, vrBookings, vrFleet, manualOverrides, dailyNotes, sheetsUrl]);
 
   const handleLoadFromSheets = async (silent = false) => {
-    if (!sheetsUrl || sheetsUrl === DEFAULT_SHEETS_URL) return;
+    if (!sheetsUrl) return; 
     if (!silent) setIsSyncing(true);
     try {
       const response = await fetch(`${sheetsUrl}?action=read`);
@@ -244,7 +244,7 @@ const App: React.FC = () => {
   };
 
   const handleSyncToSheets = async () => {
-    if (!sheetsUrl || sheetsUrl === DEFAULT_SHEETS_URL) return;
+    if (!sheetsUrl) return;
     setIsSyncing(true);
     try {
       const payload = { action: 'write', appointments, stockAppointments, vrBookings, vrFleet, manualOverrides, dailyNotes, timestamp: new Date().toISOString() };
@@ -255,6 +255,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    handleLoadFromSheets(true);
     const interval = setInterval(() => {
       handleLoadFromSheets(true);
     }, 120000); 
@@ -639,7 +640,6 @@ const App: React.FC = () => {
       immatriculation: '', 
       marque: '', 
       modele: '', 
-      dateMiseEnCirculation: toLocalDateStr(new Date()), 
       typeCarburant: 'Essence', 
       niveauCarburant: 'Full', 
       kilometrage: 0, 
@@ -671,11 +671,7 @@ const App: React.FC = () => {
   const handleReturnToToday = useCallback(() => {
     const todayMonday = getMonday(new Date());
     const dateStr = toLocalDateStr(todayMonday);
-    
-    // On met à jour la date de début
     setViewStartDate(dateStr);
-    
-    // On force la remontée du scroll pour que l'utilisateur voie le début du planning
     if (mainContentRef.current) {
       mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -686,8 +682,6 @@ const App: React.FC = () => {
     const date = new Date(y, m - 1, d);
     date.setDate(date.getDate() + (direction * 7));
     setViewStartDate(toLocalDateStr(getMonday(date)));
-    
-    // On remonte le scroll lors d'un changement de semaine pour une meilleure UX
     if (mainContentRef.current) {
       mainContentRef.current.scrollTo({ top: 0, behavior: 'auto' });
     }
@@ -932,7 +926,7 @@ const App: React.FC = () => {
             <div className={`px-6 py-2 flex items-center justify-between text-white font-black shrink-0 h-[48px] ${tempApt.status === 'annule' ? 'bg-rose-900' : 'bg-blue-600'}`}>
               <div className="flex items-center gap-4"><h2 className="text-xs tracking-widest flex items-center gap-2 uppercase"><Settings size={14} /> FICHE CHANTIER : {tempApt.clientName || 'NOUVEAU'} {tempApt.status === 'annule' && "(ANNULÉ)"}</h2></div>
               <div className="flex items-center gap-12">
-                <div className="flex flex-col items-center leading-none"><span className="text-[7px] opacity-60 uppercase mb-0.5 tracking-tighter text-white">IMMOBILISATION</span><span className="text-[14px] font-black text-blue-50">{immobilizationDays} J</span></div>
+                <div className="flex flex-col items-center leading-none"><span className="text-[7px] opacity-60 uppercase mb-0.5 tracking-tighter text-white">DUREE IMMO</span><span className="text-[14px] font-black text-blue-50">{immobilizationDays} J</span></div>
                 <div className="flex flex-col items-center leading-none"><span className="text-[7px] opacity-60 uppercase mb-0.5 tracking-tighter text-white">MO TOTAL</span><span className="text-[14px] font-black text-blue-50">{tempAptTotalHours.toFixed(1)} H</span></div>
                 <div className="flex flex-col items-end leading-none"><span className="text-[7px] opacity-60 uppercase mb-0.5 tracking-tighter text-white">MONTANT TOTAL HT</span><span className="text-[16px] font-black text-emerald-300">{(tempApt.totalAmount || 0).toLocaleString('fr-FR')} €</span></div>
               </div>
@@ -942,23 +936,23 @@ const App: React.FC = () => {
               <div className="p-4 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
                 {tempApt.status === 'annule' && (
                   <div className="bg-rose-50 border border-rose-200 p-3 rounded-lg flex items-center gap-3 text-rose-700 font-black text-[10px] mb-2 animate-pulse">
-                    <AlertCircle size={20} /> DOSSIER ANNULÉ LE {new Date(tempApt.deletedAt || "").toLocaleDateString('fr-FR')} - VISIBLE UNIQUEMENT DANS L'HISTORIQUE ET ACTIVITÉ
+                    <AlertCircle size={20} /> DOSSIER ANNULÉ LE {new Date(tempApt.deletedAt || "").toLocaleDateString('fr-FR')}
                   </div>
                 )}
                 <div className="border border-slate-100 p-3 rounded-xl bg-slate-50/10 space-y-3">
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">Client</label><input name="clientName" value={tempApt.clientName} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" required /></div>
-                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">Immatriculation</label><input name="immat" value={tempApt.immat} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
+                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">CLIENT</label><input name="clientName" value={tempApt.clientName} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" required /></div>
+                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">IMMAT.</label><input name="immat" value={tempApt.immat} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
                     <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">VEHICULE</label><input name="model" value={tempApt.model} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">Apporteur</label><input name="intermediary" value={tempApt.intermediary || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
-                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">Assurance</label><input name="insurance" value={tempApt.insurance} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
-                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">Expert</label><input name="expert" value={tempApt.expert} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
+                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">APPORTEUR</label><input name="intermediary" value={tempApt.intermediary || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
+                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">ASSURANCE</label><input name="insurance" value={tempApt.insurance} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
+                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">EXPERT</label><input name="expert" value={tempApt.expert} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] uppercase outline-none focus:ring-2 focus:ring-blue-500/20 text-black" /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">Travaux à effectuer</label><textarea name="workType" value={tempApt.workType} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-[10px] resize-none h-14 uppercase outline-none text-black" required /></div>
-                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">Infos complémentaires</label><textarea name="notes" value={tempApt.notes || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-[10px] resize-none h-14 uppercase outline-none text-black" /></div>
+                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">TRAVAUX</label><textarea name="workType" value={tempApt.workType} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-[10px] resize-none h-14 uppercase outline-none text-black" required /></div>
+                    <div className="space-y-0.5"><label className="text-[7px] font-black text-blue-600 uppercase">INFOS (complémentaires)</label><textarea name="notes" value={tempApt.notes || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-[10px] resize-none h-14 uppercase outline-none text-black" /></div>
                   </div>
                 </div>
                 <div className="grid grid-cols-12 gap-5">
@@ -976,8 +970,8 @@ const App: React.FC = () => {
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">CLIM</label><button type="button" onClick={() => setTempApt({...tempApt, hasClim: !tempApt.hasClim})} className={`w-full p-1 rounded-lg border shadow-sm flex items-center justify-center h-[25px] ${tempApt.hasClim ? 'bg-sky-100 border-sky-500 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-400 opacity-40'}`}><Snowflake size={14} /></button></div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Date Entrée</label><input type="date" name="date" value={tempApt.date} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
-                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">Heure Entrée</label><input type="time" name="appointmentHour" value={tempApt.appointmentHour} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
+                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DATE ENTREE</label><input type="date" name="date" value={tempApt.date} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
+                        <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">HEURE ENTREE</label><input type="time" name="appointmentHour" value={tempApt.appointmentHour} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DUREE IMMO (jours)</label><input type="number" step="0.5" name="estimatedDuration" value={tempApt.estimatedDuration || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 py-1 font-black text-[10px] outline-none text-black" /></div>
                         <div className="space-y-0.5"><label className="text-[7px] font-black text-emerald-600 uppercase">DATE SORTIE</label><input type="date" name="exitDate" value={tempApt.exitDate || ''} onChange={handleModalChange} className="w-full h-8 bg-white border border-slate-200 rounded-lg px-2 font-bold text-[10px] outline-none text-black" /></div>
                       </div>
@@ -985,11 +979,11 @@ const App: React.FC = () => {
                   </div>
                   <div className="col-span-6 space-y-3">
                     <div className="border border-rose-200 p-3 rounded-xl bg-rose-50/10 grid grid-cols-2 gap-3 h-full">
-                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">N° Facture</label><input name="invoiceNumber" value={tempApt.invoiceNumber || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" /></div>
-                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">MONTANT TRAVAUX HT (€)</label><input type="number" name="totalAmount" value={tempApt.totalAmount || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 font-black text-[10px] outline-none text-black" /></div>
-                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">Comm. (€)</label><input type="number" name="commission" value={tempApt.commission || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 font-black text-[10px] outline-none text-black" /></div>
+                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">FACTURE (numéro)</label><input name="invoiceNumber" value={tempApt.invoiceNumber || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 font-bold text-[10px] outline-none text-black" /></div>
+                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">MONTANT (Travaux HT)</label><input type="number" name="totalAmount" value={tempApt.totalAmount || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 font-black text-[10px] outline-none text-black" /></div>
+                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">COMMISSION (€)</label><input type="number" name="commission" value={tempApt.commission || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 font-black text-[10px] outline-none text-black" /></div>
                       <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">FRANCHISE (€)</label><input type="number" name="franchise" value={tempApt.franchise || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 font-black text-[10px] outline-none text-black" /></div>
-                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">Date Facture</label><input type="date" name="billingDate" value={tempApt.billingDate || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 font-bold text-[10px] outline-none text-black" /></div>
+                      <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">DATE FACTURE</label><input type="date" name="billingDate" value={tempApt.billingDate || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 font-bold text-[10px] outline-none text-black" /></div>
                       <div className="space-y-0.5"><label className="text-[7px] font-black text-rose-600 uppercase">DATE RÈGLEMENT</label><input type="date" name="paymentDate" value={tempApt.paymentDate || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 font-bold text-[10px] outline-none text-black" /></div>
                     </div>
                   </div>
@@ -1015,8 +1009,8 @@ const App: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="col-span-3 space-y-0.5"><label className="text-[7px] font-black text-amber-600 uppercase">N° Facture VR</label><input name="vrInvoiceNumber" value={tempApt.vrInvoiceNumber || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] outline-none text-black" /></div>
-                  <div className="col-span-3 space-y-0.5"><label className="text-[7px] font-black text-amber-600 uppercase">Montant VR HT (€)</label><input type="number" name="vrInvoiceAmount" value={tempApt.vrInvoiceAmount || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-black text-[10px] outline-none text-black" /></div>
+                  <div className="col-span-3 space-y-0.5"><label className="text-[7px] font-black text-amber-600 uppercase">FACTURE VR (numéro)</label><input name="vrInvoiceNumber" value={tempApt.vrInvoiceNumber || ''} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-[10px] outline-none text-black" /></div>
+                  <div className="col-span-3 space-y-0.5"><label className="text-[7px] font-black text-amber-600 uppercase">MONTANT VR HT (€)</label><input type="number" name="vrInvoiceAmount" value={tempApt.vrInvoiceAmount || 0} onChange={handleModalChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-black text-[10px] outline-none text-black" /></div>
                 </div>
               </div>
               <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between no-print shrink-0">

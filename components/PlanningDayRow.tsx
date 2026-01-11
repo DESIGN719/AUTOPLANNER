@@ -127,16 +127,17 @@ const PlanningDayRow: React.FC<PlanningDayRowProps> = ({
       {/* 1. HEADER COMPACT (26px) */}
       <div className={`flex items-stretch sticky top-0 left-0 z-[110] shadow-sm border-b border-white/5 ${headerBgClass}`} style={{ height: `${BANNER_HEIGHT}px` }}>
         
-        {/* Identifiant VR - Layout plus compact avec icône voiture et modèle */}
+        {/* Identifiant VR - Layout plus compact avec icône voiture au début et modèle sous l'immat */}
         <div className="w-[320px] shrink-0 border-r-2 border-slate-800/50 flex bg-black/10">
            {/* Icône voiture en début de bandeau */}
            <div className="w-8 shrink-0 flex items-center justify-center border-r border-white/5 text-white/40">
              <Car size={14} />
            </div>
+           
            {activeVrs.map((vr) => (
-             <div key={vr.id} className="flex-1 border-r border-white/5 last:border-0 flex flex-col items-center justify-center px-1 overflow-hidden leading-none gap-0.5">
-               <span className="text-[8px] font-black text-white truncate w-full text-center uppercase tracking-tighter">{vr.immatriculation}</span>
-               <span className="text-[6.5px] font-bold text-white/40 truncate w-full text-center uppercase">{vr.modele}</span>
+             <div key={vr.id} className="flex-1 border-r border-white/5 last:border-0 flex flex-col items-center justify-center px-1 overflow-hidden leading-none">
+               <span className="text-[8px] font-black text-white truncate w-full text-center uppercase tracking-tighter mb-0.5">{vr.immatriculation}</span>
+               <span className="text-[6.5px] font-bold text-white/40 truncate w-full text-center uppercase tracking-tight">{vr.modele}</span>
              </div>
            ))}
         </div>
