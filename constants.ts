@@ -4,14 +4,14 @@ export const VR_SLOTS_COUNT = 6;
 export const ROW_HEIGHT_PX = 128; // 28px (Bannière) + 100px (Contenu)
 
 export const STATUS_CONFIG: Record<string, { label: string; color: string; border: string; bg: string }> = {
-  'stock': { label: 'Non planifié', color: 'text-slate-500', border: 'border-slate-300', bg: 'bg-slate-100' },
-  'a-venir': { label: 'Planifié', color: 'text-blue-600', border: 'border-blue-200', bg: 'bg-blue-50' },
-  'en-cours': { label: 'En cours', color: 'text-orange-600', border: 'border-orange-200', bg: 'bg-orange-50' },
-  'livre': { label: 'Livré', color: 'text-emerald-600', border: 'border-emerald-200', bg: 'bg-emerald-50' },
-  'livre-non-termine': { label: 'Livré non terminé', color: 'text-rose-600', border: 'border-rose-200', bg: 'bg-rose-50' },
-  'facture': { label: 'Facturé', color: 'text-purple-600', border: 'border-purple-200', bg: 'bg-purple-50' },
-  'paye': { label: 'Payé', color: 'text-slate-600', border: 'border-slate-200', bg: 'bg-slate-100' },
-  'annule': { label: 'Annulé', color: 'text-rose-900', border: 'border-rose-300', bg: 'bg-rose-100/50' }
+  'NON PLANIFIE': { label: 'NON PLANIFIE', color: 'text-slate-500', border: 'border-slate-300', bg: 'bg-slate-100' },
+  'PLANIFIE': { label: 'PLANIFIE', color: 'text-blue-600', border: 'border-blue-200', bg: 'bg-blue-50' },
+  'EN COURS': { label: 'EN COURS', color: 'text-orange-600', border: 'border-orange-200', bg: 'bg-orange-50' },
+  'LIVRE': { label: 'LIVRE', color: 'text-emerald-600', border: 'border-emerald-200', bg: 'bg-emerald-50' },
+  'LIVRE NON TERMINE': { label: 'LIVRE NON TERMINE', color: 'text-rose-600', border: 'border-rose-200', bg: 'bg-rose-50' },
+  'FACTURE': { label: 'FACTURE', color: 'text-purple-600', border: 'border-purple-200', bg: 'bg-purple-50' },
+  'PAYE': { label: 'PAYE', color: 'text-slate-600', border: 'border-slate-200', bg: 'bg-slate-100' },
+  'ANNULE': { label: 'ANNULE', color: 'text-rose-900', border: 'border-rose-300', bg: 'bg-rose-100/50' }
 };
 
 export const CATEGORY_COLORS = {

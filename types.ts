@@ -6,43 +6,10 @@ export type LaborTimes = {
   meca: number;
 };
 
-export type AppointmentStatus = 'stock' | 'a-venir' | 'en-cours' | 'livre' | 'livre-non-termine' | 'facture' | 'paye' | 'annule';
+export type AppointmentStatus = 'NON PLANIFIE' | 'PLANIFIE' | 'EN COURS' | 'LIVRE' | 'LIVRE NON TERMINE' | 'FACTURE' | 'PAYE' | 'ANNULE';
 
 export type PRStatus = 'none' | 'a-commander' | 'commande' | 'recu';
 
-/**
- * Correspondance Colonnes Google Sheets (ONGLET CHANTIER) :
- * A: id
- * B: status (STATUT)
- * C: clientName (CLIENT)
- * D: immat (IMMAT.)
- * E: model (VEHICULE)
- * F: date (DATE ENTREE)
- * G: appointmentHour (HEURE ENTREE)
- * H: exitDate (DATE SORTIE)
- * I: estimatedDuration (DUREE IMMO)
- * J: intermediary (APPORTEUR)
- * K: insurance (ASSURANCE)
- * L: expert (EXPERT)
- * M: workType (TRAVAUX)
- * N: notes (INFOS)
- * O: t1 (T1)
- * P: t2 (T2)
- * Q: tp (TP)
- * R: meca (MECA)
- * S: prStatus (PR)
- * T: hasGeo (GEO)
- * U: hasClim (CLIM)
- * V: invoiceNumber (FACTURE)
- * W: totalAmount (MONTANT)
- * X: franchise (FRANCHISE)
- * Y: commission (COMMISSION)
- * Z: vrImmat (IMMAT. VR)
- * AA: vrInvoiceNumber (FACTURE VR)
- * AB: vrInvoiceAmount (MONTANT VR)
- * AC: billingDate (DATE FACTURE)
- * AD: paymentDate (DATE REGLEMENT)
- */
 export interface Appointment {
   id: string;
   status: AppointmentStatus;
@@ -77,59 +44,103 @@ export interface Appointment {
 }
 
 /**
- * Correspondance Colonnes FLOTTE VR :
- * A: ID, B: MARQUE, C: MODELE, D: IMMATRICULATION, E: VIN, F: ENERGIE,
- * G: KILOMETRAGE, H: NIV. CARBURANT, I: PROPRIETAIRE, J: NUM CONTRAT,
- * K: DATE ECHEANCE, L: FORFAIT KM, M: NOTE
+ * STRUCTURE FLOTTE VR (Correspondance stricte)
+ * A: ID
+ * B: POSITION
+ * C: VISIBLE
+ * D: IMMAT.
+ * E: MARQUE
+ * F: MODELE
+ * G: COULEUR
+ * H: VIN
+ * I: MISE EN CIRCULATION
+ * J: ENERGIE
+ * K: KILOMETRAGE
+ * L: NIV. CARBURANT
+ * M: NOTES
+ * N: PROPRIETAIRE
+ * O: NUM CONTRAT
+ * P: DATE ECHEANCE
+ * Q: FORFAIT KM
  */
 export interface VRData {
-  id: string;
-  marque: string;
-  modele: string;
-  immatriculation: string;
-  vin?: string;
-  typeCarburant: string;
-  kilometrage: number;
-  niveauCarburant: string;
-  proprietaire?: string;
-  numContrat?: string;
-  dateEcheanceContrat?: string;
-  kmMax?: number;
-  observations?: string;
-  isVisible: boolean;
-  slotPosition: number;
+  id: string;              // A
+  slotPosition: number;    // B
+  isVisible: boolean;      // C
+  immatriculation: string; // D
+  marque: string;          // E
+  modele: string;          // F
+  color?: string;          // G
+  vin?: string;            // H
+  firstRegistrationDate?: string; // I
+  typeCarburant: string;   // J
+  kilometrage: number;     // K
+  niveauCarburant: string; // L
+  observations?: string;   // M (NOTES)
+  proprietaire?: string;   // N
+  numContrat?: string;     // O
+  dateEcheanceContrat?: string; // P
+  kmMax?: number;          // Q
 }
 
+export type VRBookingStatus = 'RESERVE' | 'OCCUPE' | 'RETOURNE' | 'ANNULE';
+
 /**
- * Correspondance Colonnes MOUVEMENTS VR :
- * A: ID, B: STATUT, C: VR, D: CLIENT, E: DATE DEPART, F: HEURE DEPART,
- * G: DATE RETOUR, H: HEURE RETOUR, I: KM DEPART, J: KM RETOUR,
- * K: CARB. DEPART, L: CARB. RETOUR, M: INFOS
+ * STRUCTURE MOUVEMENTS VR (Correspondance stricte)
+ * A: ID
+ * B: STATUT
+ * C: VR
+ * D: CLIENT
+ * E: ADRESSE
+ * F: TELEPHONE
+ * G: NUMERO PC
+ * H: DATE PC
+ * I: AUTRE CONDUCTEUR
+ * J: DATE DEPART
+ * K: HEURE DEPART
+ * L: DATE RETOUR
+ * M: HEURE RETOUR
+ * N: KM DEPART
+ * O: KM RETOUR
+ * P: CARB. DEPART
+ * Q: CARB. RETOUR
+ * R: INFOS
+ * S: ID_RDV (Technique)
  */
 export interface VRBooking {
   id: string;              // A
-  status: 'active' | 'annule'; // B
+  status: VRBookingStatus; // B
   vrId: string;            // C
   clientName: string;      // D
-  startDate: string;       // E
-  startHour: string;       // F
-  endDate: string;         // G
-  endHour: string;         // H
-  startMileage?: number;   // I
-  endMileage?: number;     // J
-  startFuel?: string;      // K
-  endFuel?: string;        // L
-  observations?: string;   // M
   
-  // Champs internes techniques
-  appointmentId?: string; 
-  contractGenerated?: boolean;
+  clientAddress?: string;   // E
+  clientPhone?: string;     // F
+  licenseNumber?: string;   // G
+  licenseDate?: string;     // H
+  secondaryDriver?: string; // I
+
+  startDate: string;       // J
+  startHour: string;       // K
+  endDate: string;         // L
+  endHour: string;         // M
+  startMileage?: number;   // N
+  endMileage?: number;     // O
+  startFuel?: string;      // P
+  endFuel?: string;        // Q
+  observations?: string;   // R (INFOS)
+  
+  appointmentId?: string;  // S (Lien technique)
 }
 
 export interface DailyNote {
-  id: string;    // A
-  date: string;  // B
-  content: string; // C
+  id: string;
+  date: string;
+  content: string;
+}
+
+export interface DayOverride {
+  date: string;
+  reason: string;
 }
 
 export interface DayData {

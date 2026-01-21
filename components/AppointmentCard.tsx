@@ -14,14 +14,21 @@ interface AppointmentCardProps {
 
 const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, variant = 'summary', onEdit, onCyclePR, className = "" }) => {
   const handleDragStart = (e: React.DragEvent) => {
-    if (appointment.status === 'annule') return;
+    if (appointment.status === 'ANNULE') return;
     e.dataTransfer.setData('appointmentId', appointment.id);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const currentStatus = STATUS_CONFIG[appointment.status || 'a-venir'];
+  const statusKey = appointment.status || 'PLANIFIE';
+  const currentStatus = STATUS_CONFIG[statusKey];
   const totalLaborHours = (appointment.laborTimes.t1 + appointment.laborTimes.t2 + appointment.laborTimes.tp + appointment.laborTimes.meca);
-  const isAnnule = appointment.status === 'annule';
+  const isAnnule = appointment.status === 'ANNULE';
+
+  // Dérivation des styles basés sur le statut
+  const statusBg = currentStatus.color.replace('text-', 'bg-'); // ex: bg-blue-600
+  const statusBorder = currentStatus.border; // ex: border-blue-200
+  const statusBgLight = currentStatus.bg; // ex: bg-blue-50
+  const statusLineColor = currentStatus.color.replace('text-', 'border-'); // ex: border-blue-600
 
   const handlePRClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -35,7 +42,7 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, variant 
       case 'commande': return 'bg-amber-500 text-white border-amber-600';
       case 'recu': return 'bg-emerald-600 text-white border-emerald-700';
       default: return isPlanningView 
-        ? 'bg-slate-50 text-slate-200 border-slate-100' 
+        ? 'bg-slate-50 text-slate-300 border-slate-200' 
         : 'bg-slate-800 text-slate-600 border-slate-700 opacity-20';
     }
   };
@@ -44,25 +51,25 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, variant 
     return (
       <div 
         onDoubleClick={() => onEdit?.(appointment.id)}
-        className={`flex items-center bg-[#1e293b]/40 border border-slate-700/50 hover:border-blue-500/40 rounded-lg p-2 gap-3 transition-all cursor-pointer relative overflow-hidden text-[10px] uppercase group ${className} ${isAnnule ? 'opacity-50 grayscale' : ''}`}
+        className={`flex items-center bg-[#1e293b]/40 border border-slate-700/50 hover:border-blue-500/40 rounded-lg p-2 gap-3 transition-all cursor-pointer relative overflow-hidden text-[12px] uppercase group ${className} ${isAnnule ? 'opacity-50 grayscale' : ''}`}
       >
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${currentStatus.color.replace('text-', 'bg-')}`} />
         
         <div className="w-[180px] shrink-0 min-w-0">
           <div className="flex items-center gap-1.5 overflow-hidden">
             {isAnnule ? <AlertCircle size={12} className="text-rose-500 shrink-0" /> : <User size={12} className="text-blue-400 shrink-0" />}
-            <span className={`text-[11px] font-black truncate tracking-tight ${isAnnule ? 'text-slate-400' : 'text-white'}`}>{appointment.clientName || "SANS NOM"} {isAnnule && "(ANNULÉ)"}</span>
+            <span className={`text-[13px] font-black truncate tracking-tight ${isAnnule ? 'text-slate-400' : 'text-white'}`}>{appointment.clientName || "SANS NOM"} {isAnnule && "(ANNULÉ)"}</span>
           </div>
-          <div className="flex items-center gap-2 text-[8.5px] font-bold text-slate-500 truncate pl-[18px]">
+          <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 truncate pl-[18px]">
             <span className="text-blue-300 shrink-0">{appointment.immat || "NO-IMMAT"}</span>
             <span className="opacity-20">|</span>
             <span className="truncate opacity-70">{appointment.model || "MODÈLE INCONNU"}</span>
           </div>
         </div>
 
-        <div className="flex-1 min-w-0 flex items-center gap-3 bg-slate-900/40 px-3 py-1.5 rounded-md border border-slate-700/30">
+        <div className="flex-1 min-w-0 flex items-center gap-2 bg-slate-900/40 px-2 py-1 rounded-md border border-slate-700/30 self-stretch">
           <Wrench size={14} className="text-blue-500/40 shrink-0" />
-          <span className="text-blue-100 font-bold text-[8.5px] tracking-tight truncate uppercase">
+          <span className="text-blue-100 font-bold text-[10px] tracking-tight leading-tight line-clamp-2 uppercase">
             {appointment.workType || "TRAVAUX À DÉFINIR"}
           </span>
         </div>
@@ -71,8 +78,8 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, variant 
            <div className="flex items-center gap-1">
              {['t1','t2','tp','meca'].map(k => (
                <div key={k} className="flex flex-col items-center w-7">
-                 <span className="text-[6px] text-slate-500 font-black">{k.toUpperCase()}</span>
-                 <span className={`text-[10px] font-black ${(appointment.laborTimes as any)[k] > 0 ? 'text-white' : 'text-slate-800'}`}>
+                 <span className="text-[8px] text-slate-500 font-black">{k.toUpperCase()}</span>
+                 <span className={`text-[12px] font-black ${(appointment.laborTimes as any)[k] > 0 ? 'text-white' : 'text-slate-800'}`}>
                    {(appointment.laborTimes as any)[k] || '0'}
                  </span>
                </div>
@@ -82,8 +89,8 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, variant 
            <div className="w-px h-6 bg-slate-700 mx-1" />
            
            <div className="flex flex-col items-center px-1 min-w-[40px]">
-             <span className="text-[6px] text-slate-500 font-black">TOTAL</span>
-             <span className="text-[11px] font-black text-blue-400 leading-none">{totalLaborHours.toFixed(1)}H</span>
+             <span className="text-[8px] text-slate-500 font-black">TOTAL</span>
+             <span className="text-[12px] font-black text-blue-400 leading-none">{totalLaborHours.toFixed(1)}H</span>
            </div>
 
            <div className="w-px h-6 bg-slate-700 mx-1" />
@@ -104,33 +111,33 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, variant 
            </div>
         </div>
 
-        <div className="w-[110px] shrink-0 flex flex-col justify-center border-l border-slate-700/50 pl-3">
-           <div className="flex items-center gap-2">
+        <div className="w-[80px] shrink-0 flex flex-col justify-center border-l border-slate-700/50 pl-2">
+           <div className="flex items-center gap-1.5">
              <Calendar size={10} className="text-slate-500" />
-             <span className="text-white font-black text-[9px]">{appointment.date ? new Date(appointment.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'}) : '--/--'}</span>
+             <span className="text-white font-black text-[11px]">{appointment.date ? new Date(appointment.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'}) : '--/--'}</span>
            </div>
-           <div className="flex items-center gap-2">
+           <div className="flex items-center gap-1.5">
              <Truck size={10} className="text-emerald-500" />
-             <span className="text-emerald-400 font-black text-[9px]">{appointment.exitDate ? new Date(appointment.exitDate).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'}) : '--/--'}</span>
+             <span className="text-emerald-400 font-black text-[11px]">{appointment.exitDate ? new Date(appointment.exitDate).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'}) : '--/--'}</span>
            </div>
         </div>
 
         <div className="w-[160px] shrink-0 flex items-center justify-end gap-3 border-l border-slate-700/50 pl-3">
           <div className="flex flex-col items-end min-w-[70px]">
-            <span className="text-[6px] text-slate-500 font-black uppercase">MONTANT CA</span>
-            <span className="text-white font-black text-[13px] leading-none tracking-tight">{(appointment.totalAmount || 0).toLocaleString('fr-FR')}€</span>
+            <span className="text-[8px] text-slate-500 font-black uppercase">MONTANT CA</span>
+            <span className="text-white font-black text-[14px] leading-none tracking-tight">{(appointment.totalAmount || 0).toLocaleString('fr-FR')}€</span>
           </div>
           
           <div className="w-[60px] flex justify-end">
             {appointment.hasVr ? (
                <div className="bg-yellow-400 text-slate-900 border border-yellow-500 px-1.5 py-0.5 rounded flex flex-col items-center justify-center shadow-sm">
                   <Car size={10} fill="currentColor" />
-                  <span className="text-[7px] font-black leading-none mt-0.5 truncate w-full text-center">{appointment.vrImmat || "VR"}</span>
+                  <span className="text-[9px] font-black leading-none mt-0.5 truncate w-full text-center">{appointment.vrImmat || "VR"}</span>
                </div>
             ) : (
               <div className="bg-slate-800/30 border border-slate-700/20 px-1.5 py-0.5 rounded flex flex-col items-center justify-center opacity-5">
                 <Car size={10} />
-                <span className="text-[7px] font-black leading-none mt-0.5">--</span>
+                <span className="text-[9px] font-black leading-none mt-0.5">--</span>
               </div>
             )}
           </div>
@@ -139,81 +146,77 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, variant 
     );
   }
 
+  // VUE PLANNING (Summary)
   return (
     <div 
       draggable={!isAnnule}
       onDragStart={handleDragStart}
       onDoubleClick={() => onEdit?.(appointment.id)}
-      className={`flex shrink-0 border border-slate-200 rounded shadow h-[94px] w-[240px] transition-all uppercase overflow-hidden ${isAnnule ? 'opacity-50 grayscale border-slate-300' : 'cursor-move bg-white hover:border-blue-400'} ${className}`}
+      className={`flex shrink-0 border rounded shadow h-[94px] w-[240px] transition-all uppercase overflow-hidden bg-white ${isAnnule ? 'opacity-50 grayscale border-slate-300' : `cursor-move ${statusBorder} hover:ring-1 hover:ring-offset-1 hover:${statusLineColor}`} ${className}`}
     >
-      <div className={`${isAnnule ? 'bg-slate-400' : 'bg-[#1e293b]'} text-white flex flex-col justify-between w-[68px] p-1 shrink-0 border-r border-slate-700/50`}>
+      {/* Sidebar colorée selon le statut */}
+      <div className={`${isAnnule ? 'bg-slate-400' : statusBg} text-white flex flex-col justify-between w-[68px] p-1 shrink-0 border-r border-white/10`}>
         <div className="flex flex-col gap-0.5 overflow-hidden">
-          <span className="text-[9px] font-black leading-tight line-clamp-2">{appointment.model || "-"}</span>
-          <span className="text-[8px] font-bold text-slate-400 truncate">{appointment.immat || "-"}</span>
+          <span className="text-[10px] font-black leading-tight truncate">{appointment.immat || "-"}</span>
+          <span className="text-[9px] font-bold text-white/80 line-clamp-2 leading-tight">{appointment.model || "-"}</span>
         </div>
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1 bg-black/20 border border-white/10 px-1 py-0.5 rounded-sm">
-            <Clock size={8} className="text-blue-300" />
-            <span className="text-[9px] font-black">{appointment.appointmentHour || "--:--"}</span>
+            <Clock size={8} className="text-white/80" />
+            <span className="text-[10px] font-black">{appointment.appointmentHour || "--:--"}</span>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col p-1.5 relative min-w-0 bg-white">
-        <div className="mb-1 flex flex-col gap-0.5">
+      <div className="flex-1 flex flex-col p-1.5 relative min-w-0 bg-white pb-6">
+        <div className="mb-0.5 flex flex-col gap-0.5">
           <div className="flex items-center gap-1">
             {isAnnule ? <AlertCircle size={9} className="text-rose-400" /> : <User size={9} className="text-slate-400" />}
-            <span className={`text-[10px] font-black truncate tracking-tight ${isAnnule ? 'text-slate-400' : 'text-slate-900'}`}>{appointment.clientName}</span>
+            <span className={`text-[12px] font-black truncate tracking-tight ${isAnnule ? 'text-slate-400' : 'text-slate-900'}`}>{appointment.clientName}</span>
             {appointment.hasVr && (
               <div className="bg-yellow-400 text-slate-900 px-0.5 rounded flex items-center gap-0.5 shadow-sm">
                 <Car size={8} fill="currentColor" />
-                <span className="text-[5px] font-black">VR</span>
+                <span className="text-[6px] font-black">VR</span>
               </div>
             )}
           </div>
           <div className="flex items-center gap-1 pl-3 leading-none min-w-0">
-             <span className="text-[7px] font-black text-blue-600 truncate uppercase">
+             <span className={`text-[8px] font-black truncate uppercase ${currentStatus.color}`}>
                 {appointment.insurance || "SANS ASS."}
              </span>
-             <span className="text-[7px] font-bold text-slate-300">|</span>
-             <span className="text-[7px] font-bold text-slate-400 truncate uppercase">
+             <span className="text-[8px] font-bold text-slate-300">|</span>
+             <span className="text-[8px] font-bold text-slate-400 truncate uppercase">
                 {appointment.expert || "SANS EXP."}
              </span>
           </div>
         </div>
 
-        <div className={`border-l-2 px-1 py-0.5 mb-1 flex-1 overflow-hidden ${isAnnule ? 'bg-slate-50 border-slate-300' : 'bg-blue-50/60 border-blue-500'}`}>
-          <span className={`text-[7px] font-black leading-[1.1] line-clamp-3 uppercase tracking-tight ${isAnnule ? 'text-slate-400' : 'text-blue-900'}`}>
+        {/* Zone Travaux colorée selon le statut */}
+        <div className={`border-l-2 px-1 py-0.5 mb-1 flex-1 overflow-hidden ${isAnnule ? 'bg-slate-50 border-slate-300' : `${statusBgLight} ${statusLineColor}`}`}>
+          <span className={`text-[10px] font-black leading-tight line-clamp-2 uppercase tracking-tight ${isAnnule ? 'text-slate-400' : 'text-slate-900'}`}>
             {appointment.workType || "TRAVAUX..."}
           </span>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-50 pt-1 mt-auto">
-          <div className="flex gap-1 items-center w-full">
-            <div className="flex gap-1 items-center">
-              {['t1','t2','tp','meca'].map(k => (
-                <div key={k} className="flex flex-col items-center">
-                  <span className="text-[5px] text-slate-400 font-black leading-none">{k.toUpperCase()}</span>
-                  <span className={`text-[8px] font-black leading-none ${(appointment.laborTimes as any)[k] > 0 ? (k === 'meca' ? 'text-blue-600' : 'text-slate-800') : 'text-slate-200'}`}>
-                    {(appointment.laborTimes as any)[k] || "0"}
-                  </span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="w-px h-3 bg-slate-100 mx-0.5" />
-            
-            <div className={`rounded-[2px] px-1 py-0.5 text-[8.5px] font-black font-mono leading-none border ${isAnnule ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-slate-900 text-white border-slate-700'}`}>
+        {/* Footer positionné en absolu en bas de la carte */}
+        <div className="absolute bottom-0 left-0 right-0 h-[22px] border-t border-slate-100 bg-white px-1.5 flex items-center justify-between z-10">
+          {/* Gauche : Total Heures + Icones */}
+          <div className="flex items-center gap-2">
+            <div className={`rounded-[3px] px-1.5 py-0.5 text-[11px] font-black font-mono leading-none border ${isAnnule ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-slate-800 text-white border-slate-700'}`}>
               {totalLaborHours.toFixed(1)}H
             </div>
-
-            <div className="flex items-center gap-1 ml-auto">
+            <div className="flex items-center gap-1">
               <button onClick={handlePRClick} className={`p-0.5 rounded border transition-all ${getPRStyle(appointment.prStatus, true)}`}>
                 <Package size={10} />
               </button>
-              <Compass size={11} className={appointment.hasGeo ? "text-amber-500" : "text-slate-100"} />
-              <Snowflake size={11} className={appointment.hasClim ? "text-sky-400" : "text-slate-100"} />
+              <Compass size={12} className={appointment.hasGeo ? "text-amber-500" : "text-slate-200"} />
+              <Snowflake size={12} className={appointment.hasClim ? "text-sky-400" : "text-slate-200"} />
             </div>
+          </div>
+
+          {/* Droite : CA */}
+          <div className={`font-black text-[12px] tracking-tight ${isAnnule ? 'text-slate-300 line-through' : 'text-emerald-600'}`}>
+            {(appointment.totalAmount || 0).toLocaleString('fr-FR')}€
           </div>
         </div>
       </div>
